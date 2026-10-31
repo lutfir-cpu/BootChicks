@@ -165,6 +165,8 @@ A real live-model smoke test remains separate.
 
 ## Existing Streamlit demo
 
+Browse the [app screenshots and PR embed Markdown](docs/screenshots/README.md).
+
 The original single-candidate web demo remains available for reference; it does not implement the new proposal-board protocol.
 Its instructions are in [the legacy demo guide](docs/legacy-streamlit.md).
 Install `.[legacy-ui]` to run it.
