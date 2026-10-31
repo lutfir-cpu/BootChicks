@@ -573,6 +573,7 @@ textarea {
 }
 
 .agent-card {
+  position: relative;
   min-width: 0;
   padding: 22px;
   display: flex;
@@ -605,7 +606,16 @@ textarea {
   flex: none;
 }
 
-.agent-chick.is-loading {
+.agent-overlay {
+  position: absolute;
+  inset: 0;
+  width: 96px;
+  height: 96px;
+  margin: auto;
+  border-radius: 14px;
+  object-fit: cover;
+  opacity: 0.5;
+  pointer-events: none;
   animation: chick-pulse 1s ease-in-out infinite;
 }
 

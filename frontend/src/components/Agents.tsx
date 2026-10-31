@@ -109,12 +109,7 @@ export function AgentCard({ role, round, run }: { role: Role; round: 1 | 2; run:
     <article className="card agent-card" aria-label={`${name}, round ${round}`}>
       <div className="agent-head">
         <div className="agent-title">
-          <img
-            className={status === 'running' ? 'agent-chick is-loading' : 'agent-chick'}
-            src={ROLE_CHICKS[role]}
-            alt=""
-            aria-hidden="true"
-          />
+          <img className="agent-chick" src={ROLE_CHICKS[role]} alt="" aria-hidden="true" />
           <h3>{name}</h3>
         </div>
         <StatusBadge status={status} />
@@ -138,6 +133,7 @@ export function AgentCard({ role, round, run }: { role: Role; round: 1 | 2; run:
         </p>
       )}
       <LogPanel label={`${name} round ${round} log`} lines={run ? agentLog(run, round, role) : []} />
+      {status === 'running' && <img className="agent-overlay" src={ROLE_CHICKS[role]} alt="" aria-hidden="true" />}
     </article>
   )
 }
