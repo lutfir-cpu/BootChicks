@@ -561,23 +561,6 @@ details[open] > summary::after {
   max-width: 68ch;
 }
 
-.outcome {
-  border-left-width: 4px;
-}
-
-.outcome-consensus {
-  border-left-color: var(--brand);
-}
-
-.outcome-fallback {
-  border-left-color: var(--warn);
-}
-
-.outcome-escalated,
-.outcome-failed {
-  border-left-color: var(--fail);
-}
-
 .outcome-head {
   display: flex;
   align-items: baseline;
