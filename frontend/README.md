@@ -5,12 +5,14 @@ No database, hosted service or agent framework is needed.
 
 ## Start
 
-Run these commands from this folder with Python 3.11 or newer:
+The Streamlit frontend lives in this `frontend/` folder.
+Install it from the repository root with Python 3.11 or newer, then start it from this folder so `.streamlit/config.toml` is applied:
 
 ```sh
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements.txt
+python -m pip install -e '.[legacy-ui]'
+cd frontend
 streamlit run app.py
 ```
 
@@ -19,7 +21,7 @@ Start in **Offline simulation**: the default case agrees in two rounds after cha
 This mode uses deterministic role simulators, explicitly labelled in the interface and exports.
 It is useful for testing the workflow and is not a substitute for demonstrating the three real Claude calls.
 
-To use Claude, copy `.env.example` to `.env`, put your API key there, choose a structured-output-capable model available to your account, restart the app and select **Claude agents**.
+To use Claude, copy `.env.example` to `.env` in the repository root, put your API key there, choose a structured-output-capable model available to your account, restart the app and select **Claude agents**.
 Never commit `.env`.
 Credentials are not included in downloads.
 Each round makes three independent role calls in parallel.
@@ -79,6 +81,19 @@ Aircraft/runway performance suitability, taxi-route availability, detailed staff
 There is no diversion or emergency-handling model.
 A failure means no feasible option **within the configured replay assumptions and the next 60 minutes**, not that no real-world safe action exists.
 
+## Agent prompts
+
+Each role has its own system prompt, shown under **Agent system prompts** in tabs for ATC, Pilot and Ground.
+The defaults are defined in `prompts.py`.
+Edit a prompt to change the instructions that role receives on the next Claude run.
+**Reset to default** restores that role's original prompt; it is disabled while the prompt is unchanged.
+Edits last for the browser session and are not saved to disk.
+A blank prompt blocks Claude runs until it is filled in or reset.
+Offline simulation ignores prompts.
+The prompts used by a Claude run are included in the downloaded replay, and the result lists which roles used edited prompts.
+Changing a prompt after a Claude run marks that result as stale.
+The scenario JSON is always sent separately as the user message, so an edited prompt cannot change scenario facts or bypass the Python checks.
+
 ## Coordination
 
 Three role prompts own ATC, Pilot and Ground concerns.
@@ -102,11 +117,15 @@ The simulation state is frozen during a run; editing inputs starts a new replay 
 
 ## Tests
 
+From the repository root:
+
 ```sh
 python -m pip install -r requirements-dev.txt
 python -m pytest -q
 ruff check .
 ```
+
+Frontend tests live in `frontend/tests`.
 
 Tests use fake responses and never require an API key.
 They cover end-to-end Streamlit interactions, rerun persistence, independent structured provider calls, constraint boundaries, unsafe counters, stale approvals, provider failures, round budgets and CSV errors.

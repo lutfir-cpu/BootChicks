@@ -168,6 +168,7 @@ A real live-model smoke test remains separate.
 Browse the [app screenshots and PR embed Markdown](docs/screenshots/README.md).
 
 The original single-candidate web demo remains available for reference; it does not implement the new proposal-board protocol.
-Its instructions are in [the legacy demo guide](docs/legacy-streamlit.md).
+Its code, sample data and tests live in `frontend/`, separate from the `src/bootchicks` backend.
+Its instructions are in [the frontend guide](frontend/README.md).
 Install `.[legacy-ui]` to run it.
-The blueprint backend is the CLI/API above; no new frontend scaffolding was added.
+The frontend lets you view, edit and reset the system prompt of each Claude role.

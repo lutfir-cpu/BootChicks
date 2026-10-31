@@ -1,7 +1,7 @@
 # Blueprint coverage
 
 The authoritative backend is `src/bootchicks`.
-The earlier top-level Streamlit modules remain a separate legacy demo.
+The earlier Streamlit demo remains a separate legacy frontend in `frontend/`.
 
 | Blueprint area | Implemented evidence |
 | --- | --- |

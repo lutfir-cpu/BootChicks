@@ -1,6 +1,7 @@
-"""Run with: streamlit run app.py"""
+"""Run from this folder with: streamlit run app.py"""
 
 import hashlib
+import json
 import os
 from pathlib import Path
 
@@ -12,11 +13,12 @@ from pydantic import ValidationError
 from agents import ClaudeAgents, SimulatedAgents
 from csv_import import eligible_flights
 from engine import negotiate
-from models import Scenario
+from models import ROLES, Scenario
+from prompts import DEFAULT_PROMPTS, resolve_prompts
 from samples import bundled_scenarios
 
 ROOT = Path(__file__).resolve().parent
-load_dotenv(ROOT / ".env")
+load_dotenv(ROOT.parent / ".env")
 st.set_page_config(
     page_title="Arrival desk", page_icon=":material/connecting_airports:", layout="wide"
 )
@@ -34,6 +36,10 @@ def parse_intervals(value):
         start, finish = part.strip().split(":")
         result.append({"start": int(start), "end": int(finish)})
     return result
+
+
+def reset_prompt(role):
+    st.session_state[f"prompt_{role}"] = DEFAULT_PROMPTS[role]
 
 
 @st.cache_data(show_spinner=False)
@@ -57,9 +63,10 @@ with st.sidebar:
     mode = st.radio(
         "Agent mode", ["Offline simulation", "Claude agents"], key="agent_mode"
     )
-    st.caption(
-        "Offline mode uses deterministic role simulators. It does not demonstrate real LLM negotiation."
-    )
+    if mode == "Offline simulation":
+        st.caption(
+            "Offline mode uses deterministic role simulators. It does not demonstrate real LLM negotiation."
+        )
     max_rounds = st.number_input(
         "Maximum negotiation rounds", min_value=1, max_value=3, value=2, step=1
     )
@@ -294,6 +301,44 @@ with st.expander("Input sources and calculated fuel budget"):
             f"Calculated extra holding budget: {budget:.1f} min. A negative budget means even the nominal plan fails this fuel policy."
         )
 
+st.subheader("Agent system prompts")
+st.caption(
+    "Each Claude role receives its own system prompt alongside the scenario JSON. Edits apply to the next run and last for this browser session."
+)
+if mode != "Claude agents":
+    st.caption(
+        "Offline simulation uses deterministic role simulators and ignores these prompts."
+    )
+prompt_overrides = {}
+for role, tab in zip(ROLES, st.tabs(list(ROLES), key="prompt_tabs")):
+    key = f"prompt_{role}"
+    st.session_state.setdefault(key, DEFAULT_PROMPTS[role])
+    with tab:
+        prompt_overrides[role] = st.text_area(
+            f"{role} system prompt", key=key, height=340
+        )
+        customized = prompt_overrides[role] != DEFAULT_PROMPTS[role]
+        status, reset = st.columns([4, 1], vertical_alignment="center")
+        status.caption(
+            "Edited - differs from the default prompt."
+            if customized
+            else "Using the default prompt."
+        )
+        reset.button(
+            "Reset to default",
+            key=f"reset_{role}",
+            icon=":material/restart_alt:",
+            on_click=reset_prompt,
+            args=(role,),
+            disabled=not customized,
+            width="stretch",
+        )
+system_prompts = None
+try:
+    system_prompts = resolve_prompts(prompt_overrides)
+except ValueError as exc:
+    st.error(f"{exc} Enter instructions or reset it to the default.")
+
 if scenario:
     scenario_download.download_button(
         "Download scenario JSON",
@@ -303,19 +348,31 @@ if scenario:
         on_click="ignore",
     )
 
-live_ready = mode != "Claude agents" or bool(os.getenv("ANTHROPIC_API_KEY"))
+live = mode == "Claude agents"
+live_ready = not live or (
+    bool(os.getenv("ANTHROPIC_API_KEY")) and system_prompts is not None
+)
 fingerprint = (
     hashlib.sha256(
-        (scenario.model_dump_json() + mode + str(max_rounds)).encode()
+        (
+            scenario.model_dump_json()
+            + mode
+            + str(max_rounds)
+            # Prompts only influence live runs, so offline results stay current when they change.
+            + (json.dumps(system_prompts) if live else "")
+        ).encode()
     ).hexdigest()
     if scenario
     else None
 )
 if st.button(
-    "Run negotiation", type="primary", disabled=scenario is None or not live_ready
+    "Run negotiation",
+    key="run",
+    type="primary",
+    disabled=scenario is None or not live_ready,
 ):
     with st.spinner("Evaluating the arrival plan..."):
-        agent = ClaudeAgents() if mode == "Claude agents" else SimulatedAgents()
+        agent = ClaudeAgents(system_prompts) if live else SimulatedAgents()
         result = negotiate(scenario, agent, int(max_rounds))
     st.session_state["result"] = result
     st.session_state["result_fingerprint"] = fingerprint
@@ -332,6 +389,13 @@ if result:
     st.caption(
         f"{result.mode} | {result.round_count} rounds | {result.agent_message_count} validated agent messages | {result.api_request_count} API requests"
     )
+    edited_roles = [
+        role
+        for role, prompt in result.system_prompts.items()
+        if prompt != DEFAULT_PROMPTS[role]
+    ]
+    if edited_roles:
+        st.caption("Edited system prompts used for: " + ", ".join(edited_roles))
     if result.missing_fields:
         st.warning("Missing: " + ", ".join(result.missing_fields))
     if result.plan:
