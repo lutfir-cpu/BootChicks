@@ -100,6 +100,8 @@ export interface CheckResult {
   unit: string
   margin: number | null
   source_reference: string
+  classification: 'HARD_SAFETY' | 'AUTHORIZATION_REQUIRED'
+  review_policy_version: string
 }
 
 interface Outcomes {
@@ -119,9 +121,10 @@ export interface CandidateEvaluation {
   feasible: boolean
   checks: CheckResult[]
   outcomes: Outcomes | null
+  review_status: 'SAFE' | 'REQUIRES_AUTHORIZATION' | 'SAFETY_BLOCKED'
 }
 
-export type RunStatus = 'CONSENSUS' | 'FALLBACK' | 'ESCALATED' | 'FAILED'
+export type RunStatus = 'CONSENSUS' | 'FALLBACK' | 'REVIEW_REQUIRED' | 'ESCALATED' | 'FAILED'
 
 export interface RunResult {
   run_id: string
@@ -135,6 +138,13 @@ export interface RunResult {
   selected_plan: CandidatePlan | null
   evaluation: CandidateEvaluation | null
   consensus_certificate: { plan_hash: string } | null
+  review_recommendation: {
+    candidate: CandidatePlan
+    evaluation: CandidateEvaluation
+    required_action: 'AUTHORIZE' | 'REMEDIATE'
+    supporting_messages: Record<Role, string>
+  } | null
+  human_review_required: boolean
   fallback_reason: string | null
   improvement_metrics: Record<string, number> | null
 }
@@ -165,7 +175,7 @@ export interface Vote {
   candidate_id: string
   plan_hash: string
   action: PlannedAction | null
-  decision: 'ACCEPT' | 'REJECT'
+  decision: 'ACCEPT' | 'REJECT' | 'SUPPORT_IF_AUTHORIZED' | 'SUPPORT_IF_REMEDIATED'
   preference_rank: number
   reason_codes: string[]
   rationale: string
@@ -192,7 +202,8 @@ export interface BoardCandidate {
   action: PlannedAction
   proposers: Role[]
   feasible: boolean
-  checks: Pick<CheckResult, 'constraint_id' | 'domain' | 'passed'>[]
+  review_status: CandidateEvaluation['review_status']
+  checks: CheckResult[]
 }
 
 export interface TimelineEntry {
@@ -228,6 +239,14 @@ export interface DecisionLog {
       snapshot_before: string
       snapshot_after: string
       reservations: number
+    } | null
+    review_recommendation: {
+      candidate_id: string
+      plan_hash: string
+      action: PlannedAction
+      required_action: 'AUTHORIZE' | 'REMEDIATE'
+      review_status: CandidateEvaluation['review_status']
+      failed_checks: CheckResult[]
     } | null
     terminal: { status: RunStatus; reason: string; reason_text: string } | null
   }

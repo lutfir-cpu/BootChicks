@@ -69,15 +69,44 @@ function Outcome({ result, log, stale }: { result: RunResult; log: DecisionLog; 
         <DataLine label="Time" value={`${formatNumber(result.latency_ms / 1000, 2)} s`} />
       </div>
       <ChosenPlan result={result} log={log} />
+      <ReviewWarning result={result} />
       <h4 className="subheading">How it was decided</h4>
       <Explanation log={log} />
       {result.evaluation && <Checks checks={result.evaluation.checks} />}
+      {result.review_recommendation && <Checks checks={result.review_recommendation.evaluation.checks} />}
       <p className="audit">
         Audit trail: <a href={`/runs/${result.run_id}`}>result JSON</a> ·{' '}
         <a href={`/runs/${result.run_id}/events?format=jsonl`}>events JSONL</a>
         <span className="subtle mono"> run {result.run_id.slice(0, 8)}</span>
       </p>
     </>
+  )
+}
+
+function ReviewWarning({ result }: { result: RunResult }) {
+  const recommendation = result.review_recommendation
+  if (!recommendation) return null
+  const failed = recommendation.evaluation.checks.filter((check) => !check.passed)
+  const action = recommendation.candidate.action
+  const requiredAction = recommendation.required_action === 'AUTHORIZE' ? 'authorization' : 'remediation'
+  return (
+    <section className="review-warning" role="alert" aria-labelledby="review-warning-title">
+      <h4 id="review-warning-title">Do not execute - human review required</h4>
+      <p>
+        Plan <span className="mono">{recommendation.candidate.candidate_id.slice(0, 8)}</span> at{' '}
+        {clockTime(action.landing_slot)} is a non-committable recommendation. It requires human{' '}
+        {requiredAction} before it can be reconsidered.
+      </p>
+      <ul className="rejections">
+        {failed.map((check) => (
+          <li key={check.constraint_id}>
+            <strong className="mono">{check.constraint_id}</strong>: {formatCheckValue(check.measured, check.unit)} measured,
+            {' '}limit {formatCheckValue(check.bound, check.unit)}.{' '}
+            <span className="fail">{check.classification.replaceAll('_', ' ')}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 
@@ -168,7 +197,7 @@ function Checks({ checks }: { checks: CheckResult[] }) {
   return (
     <details className="checks">
       <summary>
-        <span className="subheading">Hard checks for the chosen plan</span>
+        <span className="subheading">Deterministic checks for the plan</span>
         <span className={failed ? 'fail' : 'pass'}>
           {failed ? `${failed} of ${checks.length} fail` : `All ${checks.length} pass`}
         </span>
@@ -179,6 +208,7 @@ function Checks({ checks }: { checks: CheckResult[] }) {
             <tr>
               <th>Check</th>
               <th>Owner</th>
+              <th>Class</th>
               <th>Measured</th>
               <th>Limit</th>
               <th className="num">Margin</th>
@@ -198,6 +228,7 @@ function Checks({ checks }: { checks: CheckResult[] }) {
                       <td>
                         <RoleTag role={role} />
                       </td>
+                      <td>{check.classification === 'HARD_SAFETY' ? 'Safety' : 'Authorization'}</td>
                       <td>{formatCheckValue(check.measured, check.unit)}</td>
                       <td>{formatCheckValue(check.bound, check.unit)}</td>
                       <td className="num">

@@ -104,9 +104,9 @@ A deterministic result must not be described as agent agreement.
 Keep human review distinct from agent consensus:
 
 ```text
-Negotiation: CONSENSUS / FALLBACK / ESCALATED
+Negotiation: CONSENSUS / FALLBACK / REVIEW_REQUIRED / ESCALATED
 Operational use: SIMULATION ONLY
-Human review: PENDING / APPROVED / REJECTED, if implemented
+Human review: AUTHORIZE / REMEDIATE when REVIEW_REQUIRED
 ```
 
 No human is needed during the two negotiation rounds.

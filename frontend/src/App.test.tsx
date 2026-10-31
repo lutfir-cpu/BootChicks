@@ -205,16 +205,16 @@ describe('Arrival desk', () => {
     expect(screen.getByText(/ANTHROPIC_API_KEY/)).toBeInTheDocument()
   })
 
-  it('explains an escalation and skips the rounds it never reached', async () => {
+  it('shows a non-committable review warning after conditional votes', async () => {
     server.fixture = escalated
     const user = await renderDesk()
-    await runAndWait(user, 'Escalated')
-    expect(outcome().getByText(/A human must decide/)).toBeInTheDocument()
+    await runAndWait(user, 'Human review required')
+    expect(outcome().getByRole('heading', { name: /Do not execute - human review required/i })).toBeInTheDocument()
     expect(outcome().getByText(/plans; none passed. Most frequent failures/)).toBeInTheDocument()
     expect(outcome().queryByRole('heading', { name: /Landing plan/ })).not.toBeInTheDocument()
     const round2 = within(screen.getByRole('article', { name: 'ATC Agent, round 2' }))
-    expect(round2.getByText('Skipped')).toBeInTheDocument()
-    expect(round2.getByText(/Not reached. None of the proposed plans passed/)).toBeInTheDocument()
+    expect(round2.getByText('Complete')).toBeInTheDocument()
+    expect(round2.getAllByText(/Support if remediated/).length).toBeGreaterThan(0)
   })
 
   it('shows a diversion chosen without agents', async () => {

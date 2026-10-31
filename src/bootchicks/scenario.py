@@ -17,12 +17,12 @@ SCENARIOS = {
     "insufficient_fuel": {
         "label": "Insufficient fuel",
         "description": "Fuel onboard is cut to 4,300 kg, below the protected floors for every option. "
-        "Expect escalation for human review.",
+        "Expect a non-committable recommendation requiring human remediation.",
     },
     "no_gate": {
         "label": "No compatible gate",
         "description": "No gate at DFW or the DAL alternate accepts this aircraft. "
-        "Expect escalation for human review.",
+        "Expect a non-committable recommendation requiring human remediation.",
     },
     "diversion": {
         "label": "Diversion to alternate",

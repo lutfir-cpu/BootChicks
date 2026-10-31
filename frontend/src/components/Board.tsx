@@ -25,7 +25,7 @@ export function ProposalBoard({ run }: { run: RunView | null }) {
                 <th>Landing</th>
                 <th>Gate</th>
                 <th>Proposed by</th>
-                <th>Hard checks</th>
+                <th>Deterministic checks</th>
               </tr>
             </thead>
             <tbody>
@@ -52,7 +52,7 @@ export function ProposalBoard({ run }: { run: RunView | null }) {
                         <span className="pass">All {c.checks.length} pass</span>
                       ) : (
                         <span className="fail" title={failed.map((f) => f.constraint_id).join(', ')}>
-                          {failed.length} fail: {failed.slice(0, 2).map((f) => f.constraint_id).join(', ')}
+                          {c.review_status.replaceAll('_', ' ')}: {failed.slice(0, 2).map((f) => f.constraint_id).join(', ')}
                           {failed.length > 2 && ', ...'}
                         </span>
                       )}

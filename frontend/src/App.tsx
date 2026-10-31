@@ -248,7 +248,7 @@ function Desk({ options }: { options: Options }) {
 
       <section aria-labelledby="round-two-title">
         <h2 className="turn-title" id="round-two-title">
-          Round 2 - Votes on feasible plans
+          Round 2 - Votes on every evaluated plan
         </h2>
         <BranchConnector />
         <div className="agent-grid">

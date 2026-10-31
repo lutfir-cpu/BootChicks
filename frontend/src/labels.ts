@@ -15,6 +15,10 @@ export const STATUS_TEXT: Record<RunStatus, { title: string; summary: string }> 
     title: 'Fallback plan',
     summary: 'The roles did not agree, so deterministic code chose a plan that passes every hard check. This is not agent consensus.',
   },
+  REVIEW_REQUIRED: {
+    title: 'Human review required',
+    summary: 'The agents conditionally support a plan, but deterministic checks prevent an automatic commit. Nothing was booked.',
+  },
   ESCALATED: {
     title: 'Escalated',
     summary: 'No plan passed every hard check. A human must decide; nothing was booked.',

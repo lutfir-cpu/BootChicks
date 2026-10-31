@@ -16,7 +16,7 @@ from .schemas import (
     digest,
 )
 
-PROMPT_VERSION = "blueprint-agents-v3"
+PROMPT_VERSION = "blueprint-agents-v5"
 GUIDANCE = {
     "ATC": "Protect separation, runway/taxi access and capacity. Prefer early touchdown and efficient taxi paths.",
     "PILOT": "Protect aircraft limits and both fuel floors. Prefer less airborne fuel burn and retained connections.",
@@ -28,8 +28,11 @@ SHARED_RULES = (
     "Use only catalogue actions and immutable evidence. Consider the other domains' stated constraints.\n"
     "Round 1: propose up to three distinct complete LAND actions, preferred/compromise/concession, "
     "with requested concessions and constraint references. Concessions affect preferences only.\n"
-    "Round 2: ACCEPT or REJECT every published feasible candidate with its exact id/hash; "
-    "use unique ranks 1 through N, and explain specific concessions.\n"
+    "Round 2: the vote_manifest gives the exact candidate count and IDs. Return exactly one vote for every listed ID. "
+    "Before responding, count the vote objects against that manifest. ACCEPT only SAFE plans; "
+    "use SUPPORT_IF_AUTHORIZED only for REQUIRES_AUTHORIZATION plans, "
+    "SUPPORT_IF_REMEDIATED only for SAFETY_BLOCKED plans, or REJECT any plan; "
+    "use unique ranks 1 through N, and use a rationale of at most two short sentences.\n"
     "In every vote, proposal_references must list proposal_board event_id values, "
     "including at least one message from another role.\n"
     "You may accept multiple feasible options even if another is preferred. Never invent unanimous acceptance.\n"
@@ -70,7 +73,7 @@ class ClaudeProvider:
     async def respond(self, role, round_number, context, response_schema):
         response = await self.client.messages.parse(
             model=self.model,
-            max_tokens=3500,
+            max_tokens=5000,
             system=self.system_prompts[role],
             messages=[
                 {
@@ -157,17 +160,19 @@ class StubProvider:
         evaluations = context["evaluations"]
 
         def preference(e):
-            o = e["outcomes"]
+            o = e["outcomes"] or {}
             if role == "GROUND":
                 return (
+                    e["review_status"] != "SAFE",
                     e["candidate"]["action"]["gate_id"]
                     != context["shared"]["preferred_gate"],
-                    o["overtime_min"],
+                    o.get("overtime_min", float("inf")),
                     e["candidate"]["candidate_id"],
                 )
             return (
-                o["airborne_fuel_kg"],
-                o["holding_min"],
+                e["review_status"] != "SAFE",
+                o.get("airborne_fuel_kg", float("inf")),
+                o.get("holding_min", float("inf")),
                 e["candidate"]["candidate_id"],
             )
 
@@ -180,10 +185,14 @@ class StubProvider:
                 Vote(
                     candidate_id=e["candidate"]["candidate_id"],
                     plan_hash=e["candidate"]["plan_hash"],
-                    decision="ACCEPT",
+                    decision={
+                        "SAFE": "ACCEPT",
+                        "REQUIRES_AUTHORIZATION": "SUPPORT_IF_AUTHORIZED",
+                        "SAFETY_BLOCKED": "SUPPORT_IF_REMEDIATED",
+                    }[e["review_status"]],
                     preference_rank=i + 1,
-                    reason_codes=("FEASIBLE_UNDER_MOCK_RULES",),
-                    rationale="Stub review of shared evidence; accept feasible compromise.",
+                    reason_codes=(e["review_status"],),
+                    rationale="Stub review of shared evidence using the deterministic review status.",
                     proposal_references=refs,
                     accepted_concessions=(
                         f"Accept {e['candidate']['action']['gate_id']} and its modeled holding instead of insisting on the role's first preference.",

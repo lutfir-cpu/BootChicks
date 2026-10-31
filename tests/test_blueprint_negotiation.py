@@ -49,7 +49,17 @@ async def test_two_rounds_exact_certificate_and_baseline(tmp_path):
     for context in second.payload["contexts"].values():
         assert len(context["proposal_board"]) == 3
         assert set(context["cross_domain_constraints"]) == {"ATC", "PILOT", "GROUND"}
-        assert all(e["feasible"] for e in context["evaluations"])
+        assert len(context["evaluations"]) == len(board.payload["evaluations"])
+        assert context["vote_manifest"]["candidate_count"] == len(
+            context["vote_manifest"]["candidate_ids"]
+        )
+        assert set(context["vote_manifest"]["candidate_ids"]) == {
+            e["candidate"]["candidate_id"] for e in context["evaluations"]
+        }
+        assert {e["review_status"] for e in context["evaluations"]} >= {
+            "SAFE",
+            "SAFETY_BLOCKED",
+        }
 
 
 async def test_real_trigger_never_sends_historical_outcomes_to_agents(tmp_path):
@@ -71,8 +81,8 @@ async def test_real_trigger_never_sends_historical_outcomes_to_agents(tmp_path):
 @pytest.mark.parametrize(
     "scenario,status,action",
     [
-        ("insufficient_fuel", "ESCALATED", None),
-        ("no_gate", "ESCALATED", None),
+        ("insufficient_fuel", "REVIEW_REQUIRED", None),
+        ("no_gate", "REVIEW_REQUIRED", None),
         ("diversion", "FALLBACK", "DIVERT"),
     ],
 )
@@ -87,6 +97,10 @@ async def test_terminal_paths(tmp_path, scenario, status, action):
         )
     else:
         assert result.selected_plan is None
+        assert result.review_recommendation is not None
+        assert result.review_recommendation.required_action == "REMEDIATE"
+        assert result.review_recommendation.evaluation.review_status == "SAFETY_BLOCKED"
+        assert result.rounds_used == 2
         assert any(e.kind == "NO_VALIDATED_PLAN" for e in store.events(result.run_id))
 
 

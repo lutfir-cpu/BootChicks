@@ -12,10 +12,11 @@ from .providers import DEFAULT_PROMPTS
 
 ROLES = ("ATC", "PILOT", "GROUND")
 ROLE_NAMES = {"ATC": "ATC", "PILOT": "Pilot", "GROUND": "Ground"}
-TERMINAL = {"CONSENSUS", "FALLBACK", "ESCALATED", "FAILED"}
+TERMINAL = {"CONSENSUS", "FALLBACK", "REVIEW_REQUIRED", "ESCALATED", "FAILED"}
 OUTCOMES = {
     "CONSENSUS": "Consensus",
     "FALLBACK": "Fallback plan",
+    "REVIEW_REQUIRED": "Human review required",
     "ESCALATED": "Escalated",
     "FAILED": "Run failed",
 }
@@ -28,6 +29,8 @@ REASONS = {
     "ROUND_DEADLINE": "The agent did not answer before the round deadline.",
     "NO_FEASIBLE_PROPOSALS": "None of the proposed plans passed every hard check.",
     "NO_UNANIMOUS_PLAN": "No feasible plan was accepted by all three roles.",
+    "HUMAN_AUTHORIZATION_REQUIRED": "A conditionally supported plan needs explicit human authorization.",
+    "SAFETY_REMEDIATION_REQUIRED": "A conditionally supported plan remains blocked until its safety failures are remediated.",
     "NO_VALIDATED_PLAN": "Neither the destination nor the alternate has a plan that passes every hard check.",
     "TOTAL_DEADLINE_EXCEEDED": "The run used up its total time budget.",
     "PROVIDER_OR_PROTOCOL_ERROR": "An agent call failed or broke the message protocol.",
@@ -42,7 +45,8 @@ REASONS = {
     "UNKNOWN_ACTION_OR_RESOURCE": "A proposal used an action or resource outside the catalogue.",
     "DUPLICATE_PROPOSAL_LABEL": "Two proposals used the same label.",
     "UNKNOWN_CONSTRAINT_REFERENCE": "The reply cited a constraint that does not exist.",
-    "INCOMPLETE_OR_DUPLICATE_VOTE_SET": "The reply did not vote exactly once on every feasible plan.",
+    "INCOMPLETE_OR_DUPLICATE_VOTE_SET": "The reply did not vote exactly once on every evaluated plan.",
+    "INVALID_CONDITIONAL_DECISION": "The vote did not match the plan's deterministic review status.",
     "INVALID_OR_DUPLICATE_RANKS": "The vote ranks were not 1 to N without repeats.",
     "UNKNOWN_PLAN_HASH": "A vote named a plan that is not on the board.",
     "INVALID_CROSS_DOMAIN_REFERENCE": "A vote did not cite another role's proposal.",
@@ -153,6 +157,7 @@ def decision_log(state, events):
             "fallback_reason": None,
             "rejections": None,
             "commit": None,
+            "review_recommendation": None,
             "terminal": None,
         },
         "timeline": [],
@@ -208,14 +213,14 @@ def decision_log(state, events):
                 if number == 1:
                     inputs = given(context)
                 else:
-                    feasible = len(context["evaluations"])
+                    evaluated = len(context["evaluations"])
                     total = (
-                        len(log["board"]["candidates"]) if log["board"] else feasible
+                        len(log["board"]["candidates"]) if log["board"] else evaluated
                     )
                     inputs = [
                         {
-                            "label": "Feasible plans to vote on",
-                            "value": f"{feasible} of {total}",
+                            "label": "Evaluated plans to vote on",
+                            "value": f"{evaluated} of {total}",
                         },
                         {
                             "label": "Proposals from",
@@ -250,7 +255,7 @@ def decision_log(state, events):
                     note(
                         event,
                         role,
-                        f"Received the proposal board: {inputs[0]['value']} plans are feasible",
+                        f"Received the proposal board: {inputs[0]['value']} plans require a vote",
                         number,
                     )
             rounds[str(number)] = {
@@ -314,15 +319,15 @@ def decision_log(state, events):
                     }
                     for vote in response["votes"]
                 ]
-                accepted = sum(v["decision"] == "ACCEPT" for v in agent["votes"])
+                supported = sum(v["decision"] != "REJECT" for v in agent["votes"])
                 note(
                     event,
                     role,
-                    f"Voted on {len(agent['votes'])} plans: {accepted} accept, {len(agent['votes']) - accepted} reject",
+                    f"Voted on {len(agent['votes'])} plans: {supported} supported, {len(agent['votes']) - supported} rejected",
                     number,
                 )
                 for vote in sorted(agent["votes"], key=lambda v: v["preference_rank"]):
-                    verdict = "Accept" if vote["decision"] == "ACCEPT" else "Reject"
+                    verdict = vote["decision"].replace("_", " ").title()
                     note(
                         event,
                         role,
@@ -350,8 +355,23 @@ def decision_log(state, events):
                     "action": action(e["candidate"]["action"]),
                     "proposers": e["candidate"]["proposers"],
                     "feasible": e["feasible"],
+                    "review_status": e["review_status"],
                     "checks": [
-                        {k: c[k] for k in ("constraint_id", "domain", "passed")}
+                        {
+                            k: c[k]
+                            for k in (
+                                "constraint_id",
+                                "domain",
+                                "passed",
+                                "measured",
+                                "bound",
+                                "unit",
+                                "margin",
+                                "source_reference",
+                                "classification",
+                                "review_policy_version",
+                            )
+                        }
                         for c in e["checks"]
                     ],
                 }
@@ -411,6 +431,26 @@ def decision_log(state, events):
                 event,
                 "SYSTEM",
                 f"Fallback tried {len(p['rejections'])} plans; none passed every check",
+            )
+        elif kind == "REVIEW_RECOMMENDATION":
+            evaluation = p["evaluation"]
+            required_action = (
+                "authorization" if p["required_action"] == "AUTHORIZE" else "remediation"
+            )
+            decision["review_recommendation"] = {
+                "candidate_id": p["candidate"]["candidate_id"],
+                "plan_hash": p["candidate"]["plan_hash"],
+                "action": action(p["candidate"]["action"]),
+                "required_action": p["required_action"],
+                "review_status": evaluation["review_status"],
+                "failed_checks": [
+                    check for check in evaluation["checks"] if not check["passed"]
+                ],
+            }
+            note(
+                event,
+                "SYSTEM",
+                f"Recorded a non-committable plan requiring human {required_action}",
             )
         elif kind == "RESOURCE_COMMIT":
             runway = next(

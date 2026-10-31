@@ -80,16 +80,16 @@ describe('trace', () => {
     expect(agentStatus(run, 1, 'ATC')).toBe('complete')
     expect(agentStatus(run, 2, 'GROUND')).toBe('complete')
     expect(boardStatus(run)).toBe('complete')
-    expect(agentLog(run, 2, 'PILOT')[1].message).toMatch(/^Voted on 3 plans/)
+    expect(agentLog(run, 2, 'PILOT')[1].message).toMatch(/^Voted on 4 plans/)
     expect(agentLog(run, 1, 'PILOT').every((line) => !line.message.startsWith('Voted'))).toBe(true)
     expect(systemLog(run).at(-1)?.message).toMatch(/^Run finished: Consensus/)
   })
 
-  it('skips round 2 after an escalation and says why', () => {
+  it('continues round 2 when every proposal needs review', () => {
     const run = finished(escalated)
     expect(agentStatus(run, 1, 'ATC')).toBe('complete')
-    expect(agentStatus(run, 2, 'ATC')).toBe('skipped')
-    expect(skippedReason(run)).toBe('Not reached. None of the proposed plans passed every hard check.')
+    expect(agentStatus(run, 2, 'ATC')).toBe('complete')
+    expect(run.result?.status).toBe('REVIEW_REQUIRED')
   })
 
   it('skips every agent step when the run used no agents', () => {

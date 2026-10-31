@@ -16,7 +16,7 @@ The team uses the same interface day to day to tune agent system prompts, scenar
 ## Product Purpose
 
 BootChicks Arrival desk replays a hypothetical airport arrival disruption, such as a runway closure that forces a gate change.
-In round 1 the three role agents each propose up to three complete landing plans; in round 2 each votes on every plan that passed the hard checks.
+In round 1 the three role agents each propose up to three complete landing plans; in round 2 each votes on every evaluated plan, including plans that require authorization or remediation.
 The interface has two equal jobs.
 It makes the round-by-round negotiation and the final checked plan easy to follow and convincing.
 It also makes it quick to edit scenarios and prompts, run experiments and see what changed.
@@ -26,7 +26,8 @@ Success means a judge can follow one run end to end without explanation, and a t
 
 Agents negotiate, but deterministic Python checks decide.
 Every candidate is validated against fuel floors, separation, runway and taxi conflicts, gates, crews and airport capacity, and a plan only counts as **Consensus** when all three roles accept the same validated version and its resources are committed.
-When negotiation fails, the deterministic fallback is labelled as a fallback, never as agent consensus, and a run with no valid plan is escalated to a human.
+When negotiation fails, the deterministic fallback is labelled as a fallback, never as agent consensus.
+If no valid fallback exists, a conditionally supported plan is clearly labelled as non-committable and sent for human authorization or safety remediation.
 
 ## Operating Context
 
@@ -39,7 +40,7 @@ When negotiation fails, the deterministic fallback is labelled as a fallback, ne
 ## Capabilities and Constraints
 
 - Stack: React with TypeScript and Vite for the web app (confirmed 2026-10-31, replacing the earlier Streamlit demo), Python with FastAPI and SQLite for the backend.
-- Status vocabulary: **Consensus**, **Fallback**, **Escalated**, **Failed**.
+- Status vocabulary: **Consensus**, **Fallback**, **Human review required**, **Escalated**, **Failed**.
 - Each web run uses a fresh simulated environment; agent prompt edits are kept in browser local storage.
 - No accounts or hosted deployment; the server binds to localhost.
 - All operational values are labelled simulation assumptions, not real clearances or approved aviation guidance.

@@ -14,6 +14,39 @@ from .schemas import (
     Window,
 )
 
+REVIEW_POLICY_VERSION = "mock-operational-review-v1"
+AUTHORIZATION_REQUIRED_CONSTRAINTS = frozenset(
+    {"CAPACITY_MIN_TURNAROUND", "CAPACITY_SPARE_GATES"}
+)
+
+
+def classification(constraint_id: str) -> str:
+    if constraint_id in AUTHORIZATION_REQUIRED_CONSTRAINTS:
+        return "AUTHORIZATION_REQUIRED"
+    return "HARD_SAFETY"
+
+
+def review_status(checks: tuple[CheckResult, ...] | list[CheckResult]) -> str:
+    failed = [check for check in checks if not check.passed]
+    if not failed:
+        return "SAFE"
+    if any(check.classification == "HARD_SAFETY" for check in failed):
+        return "SAFETY_BLOCKED"
+    return "REQUIRES_AUTHORIZATION"
+
+
+def evaluation_for(p, checks, outcomes=None, domain_costs=None, reservations=()):
+    frozen_checks = tuple(checks)
+    return CandidateEvaluation(
+        candidate=p,
+        feasible=all(check.passed for check in frozen_checks),
+        checks=frozen_checks,
+        outcomes=outcomes,
+        domain_costs=domain_costs or {},
+        reservations=tuple(reservations),
+        review_status=review_status(frozen_checks),
+    )
+
 
 def overlaps(a: Window, b: Window) -> bool:
     return a.start < b.end and b.start < a.end
@@ -55,6 +88,8 @@ def evaluate(s: Snapshot, p: CandidatePlan) -> CandidateEvaluation:
                 margin=margin,
                 source_reference=source
                 or f"{s.profile_version}/{s.policy.version}/{key}; mock_fixture; {s.snapshot_version}",
+                classification=classification(key),
+                review_policy_version=REVIEW_POLICY_VERSION,
             )
         )
 
@@ -88,14 +123,7 @@ def evaluate(s: Snapshot, p: CandidatePlan) -> CandidateEvaluation:
         "id",
     )
     if airport is None:
-        return CandidateEvaluation(
-            candidate=p,
-            feasible=False,
-            checks=tuple(checks),
-            outcomes=None,
-            domain_costs={},
-            reservations=(),
-        )
+        return evaluation_for(p, checks)
     runway = next(
         (
             r
@@ -122,14 +150,7 @@ def evaluate(s: Snapshot, p: CandidatePlan) -> CandidateEvaluation:
     ):
         add(key, domain, value is not None, value is not None, True)
     if any(v is None for v in (runway, path, approach, gate, crew)):
-        return CandidateEvaluation(
-            candidate=p,
-            feasible=False,
-            checks=tuple(checks),
-            outcomes=None,
-            domain_costs={},
-            reservations=(),
-        )
+        return evaluation_for(p, checks)
     aircraft = s.aircraft
     touchdown = a.landing_slot
     approach_end_earliest = s.clock + timedelta(seconds=approach.duration_seconds)
@@ -557,14 +578,7 @@ def evaluate(s: Snapshot, p: CandidatePlan) -> CandidateEvaluation:
             s.policy.ground_weights,
         ),
     }
-    return CandidateEvaluation(
-        candidate=p,
-        feasible=all(c.passed for c in checks),
-        checks=tuple(checks),
-        outcomes=outcomes,
-        domain_costs=costs,
-        reservations=tuple(bookings),
-    )
+    return evaluation_for(p, checks, outcomes, costs, bookings)
 
 
 def fairness_rank(evaluation: CandidateEvaluation):

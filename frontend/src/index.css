@@ -603,6 +603,27 @@ textarea {
   color: #fff;
 }
 
+.badge-outcome-review_required {
+  background: #9b5d00;
+  border-color: #9b5d00;
+  color: #fff;
+}
+
+.review-warning {
+  margin-top: 1rem;
+  padding: 1rem 1.1rem;
+  border: 3px solid var(--fail);
+  border-radius: 8px;
+  background: #fff3e8;
+  color: #4b1f0d;
+}
+
+.review-warning h4 {
+  margin: 0 0 0.5rem;
+  color: var(--fail);
+  text-transform: uppercase;
+}
+
 .panel-title {
   margin: 0 0 7px;
   color: var(--muted);
