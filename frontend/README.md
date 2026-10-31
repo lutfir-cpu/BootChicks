@@ -1,4 +1,4 @@
-# Arrival desk frontend
+# BootChicks frontend
 
 React and TypeScript single-page app for the BootChicks backend, built with Vite.
 It talks only to the backend's HTTP API; all negotiation, checks and commits happen in `src/bootchicks`.

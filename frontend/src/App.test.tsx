@@ -125,7 +125,7 @@ async function runAndWait(user: ReturnType<typeof userEvent.setup>, title = 'Con
   expect(await outcome().findByText(title, { selector: '.verdict-status' })).toBeInTheDocument()
 }
 
-describe('Arrival desk', () => {
+describe('BootChicks', () => {
   it('runs a fixture negotiation in a fresh environment and shows every decision', async () => {
     const user = await renderDesk()
     await runAndWait(user)

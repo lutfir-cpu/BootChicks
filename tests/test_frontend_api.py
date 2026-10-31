@@ -163,11 +163,11 @@ def test_invalid_prompts_are_rejected(tmp_path, prompts, message):
 def test_built_frontend_is_served_without_shadowing_the_api(tmp_path):
     dist = tmp_path / "dist"
     dist.mkdir()
-    (dist / "index.html").write_text("<!doctype html><title>Arrival desk</title>")
+    (dist / "index.html").write_text("<!doctype html><title>BootChicks</title>")
     with TestClient(create_app(tmp_path / "web.sqlite", frontend_dir=dist)) as client:
         page = client.get("/")
         assert page.status_code == 200
-        assert "Arrival desk" in page.text
+        assert "BootChicks" in page.text
         assert client.get("/options").json()["scenarios"]
     with TestClient(create_app(tmp_path / "web.sqlite")) as client:
         assert client.get("/").status_code == 404

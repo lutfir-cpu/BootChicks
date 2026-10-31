@@ -90,7 +90,7 @@ function Shell({
         <div className="top-inner">
           <div className="brand">
             <img className="brand-mark" src={bootchickLogo} alt="" />
-            <span>Arrival desk</span>
+            <span>BootChicks</span>
           </div>
           {result && (
             <button

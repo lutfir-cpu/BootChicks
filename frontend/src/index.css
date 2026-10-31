@@ -621,7 +621,6 @@ textarea {
   height: 128px;
   border-radius: 16px;
   object-fit: cover;
-  opacity: 0.5;
   animation: chick-pulse 1s ease-in-out infinite;
 }
 

@@ -15,7 +15,7 @@ The team uses the same interface day to day to tune agent system prompts, scenar
 
 ## Product Purpose
 
-BootChicks Arrival desk replays a hypothetical airport arrival disruption, such as a runway closure that forces a gate change.
+BootChicks replays a hypothetical airport arrival disruption, such as a runway closure that forces a gate change.
 In round 1 the three role agents each propose up to three complete landing plans; in round 2 each votes on every evaluated plan, including plans that require authorization or remediation.
 The interface has two equal jobs.
 It makes the round-by-round negotiation and the final checked plan easy to follow and convincing.
@@ -48,7 +48,7 @@ If no valid fallback exists, a conditionally supported plan is clearly labelled 
 
 ## Brand Commitments
 
-- Product name: BootChicks; the web app is titled **Arrival desk**, with the tagline "Three perspectives. One checkable arrival plan."
+- Product name: BootChicks, also the web app title, with the tagline "Three perspectives. One checkable arrival plan."
 - Voice: plain, precise and careful about claims. Assumptions, simulations and fallbacks are always labelled as such.
 
 ## Evidence on Hand

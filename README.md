@@ -10,7 +10,7 @@ No real clearances are issued and no airport systems are contacted.
 
 ## Web app
 
-The **Arrival desk** React app in `frontend/` drives this backend.
+The **BootChicks** React app in `frontend/` drives this backend.
 Pick a scenario and flight, choose fixture, Claude or no agents, block gates with busy periods and edit each agent's system prompt.
 Each run shows both negotiation rounds, the Python checks for every proposal, the vote matrix, the decision and the committed plan.
 
