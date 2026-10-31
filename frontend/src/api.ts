@@ -42,7 +42,7 @@ export function startRun(body: RunRequest, idempotencyKey: string): Promise<{ ru
   })
 }
 
-export function fetchRun(runId: string): Promise<RunState> {
+function fetchRun(runId: string): Promise<RunState> {
   return request(`/runs/${runId}`)
 }
 

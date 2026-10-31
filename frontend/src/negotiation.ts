@@ -13,11 +13,9 @@ export interface AgentTurn {
   absentReason?: string
   proposals: Proposal[]
   votes: Vote[]
-  provider?: string
-  promptVersion?: string
 }
 
-export interface Rejection {
+interface Rejection {
   plan_hash: string
   failed: CheckResult[]
 }
@@ -26,7 +24,6 @@ export interface Negotiation {
   clock: string | null
   /** Taxi paths keyed by `${airport}:${path id}`, used to name the runway of a plan. */
   paths: Record<string, TaxiPath>
-  preferredGate: string | null
   rounds: Partial<Record<1 | 2, Partial<Record<Role, AgentTurn>>>>
   board: CandidateEvaluation[] | null
   unanimous: string[] | null
@@ -47,7 +44,6 @@ export function readNegotiation(events: AuditEvent[]): Negotiation {
   const view: Negotiation = {
     clock: null,
     paths: {},
-    preferredGate: null,
     rounds: {},
     board: null,
     unanimous: null,
@@ -63,12 +59,10 @@ export function readNegotiation(events: AuditEvent[]): Negotiation {
       case 'PREPARED': {
         const snapshot = p.snapshot as {
           clock: string
-          preferred_gate: string
           destination: SnapshotAirport
           alternates: SnapshotAirport[]
         }
         view.clock = snapshot.clock
-        view.preferredGate = snapshot.preferred_gate
         for (const airport of [snapshot.destination, ...snapshot.alternates]) {
           for (const path of airport.paths) view.paths[`${airport.iata_code}:${path.id}`] = path
         }
@@ -78,10 +72,9 @@ export function readNegotiation(events: AuditEvent[]): Negotiation {
         const round = p.round as 1 | 2
         const role = p.sender as Role
         const response = p.response as { proposals?: Proposal[]; votes?: Vote[] }
-        turnFor(view, round, role).proposals = response.proposals ?? []
-        turnFor(view, round, role).votes = response.votes ?? []
-        turnFor(view, round, role).provider = p.provider as string
-        turnFor(view, round, role).promptVersion = p.prompt_version as string
+        const turn = turnFor(view, round, role)
+        turn.proposals = response.proposals ?? []
+        turn.votes = response.votes ?? []
         break
       }
       case 'AGENT_ABSENT':

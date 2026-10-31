@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
 // During development, forward API calls to `bootchicks serve` on its default port.
-const api = { target: 'http://127.0.0.1:8000', changeOrigin: false }
+const api = 'http://127.0.0.1:8000'
 
 export default defineConfig({
   plugins: [react()],

@@ -34,7 +34,6 @@ def trim(event):
         payload = {
             "snapshot": {
                 "clock": snapshot["clock"],
-                "preferred_gate": snapshot["preferred_gate"],
                 "destination": {k: airports[0][k] for k in ("iata_code", "paths")},
                 "alternates": [
                     {k: a[k] for k in ("iata_code", "paths")} for a in airports[1:]

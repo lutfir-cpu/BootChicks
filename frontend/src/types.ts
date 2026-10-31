@@ -1,13 +1,12 @@
-// Mirrors the JSON shapes of src/bootchicks/schemas.py and api.py.
+// The fields the UI reads from the API; see src/bootchicks/schemas.py and api.py for the full shapes.
 
 export type Role = 'ATC' | 'PILOT' | 'GROUND'
 export const ROLES: readonly Role[] = ['ATC', 'PILOT', 'GROUND']
 
 export type Mode = 'stub' | 'live' | 'fallback'
 
-export interface ScenarioAirport {
+interface ScenarioAirport {
   iata_code: string
-  kind: 'destination' | 'alternate'
   gates: string[]
 }
 
@@ -19,7 +18,7 @@ export interface ScenarioOption {
   airports: ScenarioAirport[]
 }
 
-export interface WorkflowInput {
+interface WorkflowInput {
   scenario_id: string
   flight_row: Record<string, unknown> & {
     AIRLINE: string
@@ -39,7 +38,6 @@ export interface Options {
   live_available: boolean
   model: string
   default_prompts: Record<Role, string>
-  prompt_version: string
   sample_trigger: WorkflowInput
 }
 
@@ -69,10 +67,9 @@ export interface Action {
   crew_id: string
 }
 
-export interface CandidatePlan {
+interface CandidatePlan {
   candidate_id: string
   plan_hash: string
-  snapshot_version: string
   action: Action
   proposers: Role[]
 }
@@ -88,22 +85,16 @@ export interface CheckResult {
   source_reference: string
 }
 
-export interface Outcomes {
+interface Outcomes {
   touchdown: string
   gate_arrival: string
-  service_end: string
   holding_min: number
   airborne_fuel_kg: number
-  fuel_touchdown_kg: number
-  fuel_gate_kg: number
   landing_margin_kg: number
-  gate_margin_kg: number
   taxi_min: number
   gate_wait_min: number
   missed_connections: number
-  missed_connection_fraction: number
   overtime_min: number
-  next_departure_delay_min: number
 }
 
 export interface CandidateEvaluation {
@@ -111,7 +102,6 @@ export interface CandidateEvaluation {
   feasible: boolean
   checks: CheckResult[]
   outcomes: Outcomes | null
-  domain_costs: Partial<Record<Role, number>>
 }
 
 export type RunStatus = 'CONSENSUS' | 'FALLBACK' | 'ESCALATED' | 'FAILED'
@@ -121,35 +111,25 @@ export interface RunResult {
   status: RunStatus
   terminal_reason: string
   mode: Mode | 'recorded_replay'
-  source_provenance: { source_type: 'historical_csv' | 'synthetic_fixture'; csv_line: number | null }
-  snapshot_version: string
   rounds_used: number
   logical_agent_responses: number
   provider_requests: number
   latency_ms: number
   selected_plan: CandidatePlan | null
   evaluation: CandidateEvaluation | null
-  consensus_certificate: {
-    plan_hash: string
-    accepting_messages: Record<Role, string>
-    commit_event_id: string
-  } | null
+  consensus_certificate: { plan_hash: string } | null
   fallback_reason: string | null
-  baseline: CandidateEvaluation | null
   improvement_metrics: Record<string, number> | null
 }
 
 export interface RunState {
-  run_id: string
   status: 'QUEUED' | 'RUNNING' | RunStatus
   result: RunResult | null
 }
 
 export interface AuditEvent {
-  event_id: string
   sequence: number
   kind: string
-  timestamp: string
   payload: Record<string, unknown>
 }
 
@@ -157,7 +137,6 @@ export interface Proposal {
   label: 'preferred' | 'compromise' | 'concession'
   action: Action
   rationale: string
-  requested_concessions: string[]
 }
 
 export interface Vote {
@@ -165,7 +144,6 @@ export interface Vote {
   plan_hash: string
   decision: 'ACCEPT' | 'REJECT'
   preference_rank: number
-  reason_codes: string[]
   rationale: string
   accepted_concessions: string[]
 }
@@ -173,5 +151,4 @@ export interface Vote {
 export interface TaxiPath {
   id: string
   runway_id: string
-  gate_id: string
 }

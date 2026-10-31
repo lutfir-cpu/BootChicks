@@ -1,6 +1,6 @@
 """Load versioned operational fixtures and build bounded action catalogues."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from itertools import product
 from pathlib import Path
 
@@ -226,7 +226,3 @@ def catalogue(snapshot: Snapshot) -> dict:
         "gate_ids": [g.id for g in a.gates],
         "crew_ids": [c.id for c in a.crews],
     }
-
-
-def demo_clock() -> datetime:
-    return datetime(2026, 10, 31, 6, 0, tzinfo=timezone.utc)

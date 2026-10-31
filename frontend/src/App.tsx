@@ -106,7 +106,7 @@ function Desk({ options }: { options: Options }) {
       scenario_id: scenarioId,
       mode,
       gate_occupancies: toOccupancies(busy),
-      // Prompts only affect live runs; leaving them out keeps fixture runs comparable.
+      // Only live runs use prompts.
       role_prompts: mode === 'live' ? editedPrompts : {},
       ...(source === 'sample' ? { trigger: { ...options.sample_trigger, scenario_id: scenarioId } } : {}),
     }
