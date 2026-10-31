@@ -33,7 +33,7 @@ When negotiation fails, the deterministic fallback is labelled as a fallback, ne
 - A React web app in `frontend/` on top of the FastAPI backend in `src/bootchicks`; `bootchicks serve` serves both locally.
 - Used live on a laptop or projector during judging, and day to day by the team on their own machines.
 - Three agent modes: fixture agents (deterministic, no API calls), Claude agents (three independent structured Claude calls per round) and no agents (deterministic planner only).
-- Inputs: four backend scenarios, the synthetic demo flight or the verified UA 1590 record, gate busy periods and per-role system prompts.
+- Inputs: four backend scenarios, the synthetic demo flight or any supported real disrupted DFW arrival from the US DOT 2015 data (the verified UA 1590 record when no flights are imported), gate busy periods and per-role system prompts.
 - Outputs: the outcome, chosen plan and baseline comparison, both negotiation rounds, the checked proposal board, every hard check of the chosen plan, and JSON/JSONL audit exports.
 
 ## Capabilities and Constraints
@@ -54,6 +54,7 @@ When negotiation fails, the deterministic fallback is labelled as a fallback, ne
 
 - Backend scenarios in `data/scenarios/blueprint_v1.json` and challenge airport capacity limits in `data/constraints/airport_capacity.csv`.
 - A genuine historical trigger row (United 1590, ORD to DFW, 1 January 2015) in `data/fixtures/real_trigger.json`.
+- `bootchicks import-flights` catalogues the 17,310 supported disrupted DFW arrivals in the 2015 data, each with its raw row, lookups and source file hashes.
 - There are no real users, testimonials, measured savings or operational validations; future work must not imply any.
 
 ## Product Principles

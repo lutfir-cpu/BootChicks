@@ -5,7 +5,7 @@ The React web app in `frontend/` is a client of this backend.
 
 | Blueprint area | Implemented evidence |
 | --- | --- |
-| Genuine three-table input | `data/fixtures/real_trigger.json`: original row 3121, all raw fields/lookups, three CSV hashes |
+| Genuine three-table input | `data/fixtures/real_trigger.json`: original row 3121, all raw fields/lookups, three CSV hashes; `import-flights` stores every supported disrupted row the same way |
 | Time and provenance | Strict schemas, nullable numeric cells, explicit zones, UTC normalization, preserved raw outcomes excluded from agent contexts |
 | Mock operational state | Versioned JSON profile, explicitly overridden aircraft mapping, units/validity labels and documented fuel floors |
 | Two-round independent negotiation | Three proposal calls, deduplicated board, three complete vote calls, exact hashes and cross-domain references |
@@ -14,7 +14,7 @@ The React web app in `frontend/` is a client of this backend.
 | Consensus | Exact three-agent vote intersection plus successful atomic resource commit and certificate |
 | Fallback | Same validators, bounded destination/alternate enumeration, explicit escalation when none is feasible |
 | Durability | SQLite runs/events/snapshots, single worker ownership, transactional reservations and terminal results |
-| CLI/API | Streaming row selector; run/export/serve commands; idempotent HTTP 202 triggers, 409 conflicts, ordered JSONL |
+| CLI/API | Streaming row selector and flight catalogue import; run/export/serve commands; flight search; idempotent HTTP 202 triggers, 409 conflicts, ordered JSONL |
 | Failure boundaries | No hidden repair calls, cancellation/deadlines, missing/invalid evidence fails closed, interrupted jobs remain failed |
 | Live provider | Direct pinned Anthropic async SDK; automated checks use mocked traffic, no claim of a real paid smoke test |
 

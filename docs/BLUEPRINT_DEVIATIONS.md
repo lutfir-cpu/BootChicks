@@ -1,12 +1,13 @@
 # Deviations from the blueprint and demo guide
 
 This compares the repository with [BLUEPRINT.md](BLUEPRINT.md) (v0.1) and [DEMO_CRITERIA.md](DEMO_CRITERIA.md).
-It covers `main` at `7776bbd` (after PR #3, airport capacity).
+It covers `main` at `1c243f6` (after PR #8, real flight catalogue).
 It is a companion to [blueprint-coverage.md](blueprint-coverage.md), which lists what conforms.
 
 ## Verification basis
 
-- `python -m pytest -q`: 132 passed.
+- `python -m pytest -q`: 102 passed.
+  The count fell from 132 because the Streamlit tests were removed with the Streamlit demo.
 - `ruff check .`: clean.
 - `bootchicks run --trigger data/fixtures/real_trigger.json --mode stub` on a fresh database: `CONSENSUS`, 2 rounds, 6 logical responses, 0 provider requests.
   Selected B2 / Bravo / C2 at T+25 with 5 minutes of holding and 4,600 / 4,400 kg fuel.
@@ -23,10 +24,10 @@ The backend follows the blueprint's architecture closely.
 That includes the three raw schemas, the genuine trigger row, two rounds, exact-hash votes, the deterministic validators, fairness selection, fallback/escalation, atomic SQLite commits, the CLI/API and the audit log.
 The deviations fall into four groups:
 
-1. **Evidence gaps:** there is no live-model run, only one real source row, and none of the evaluation tooling the demo guide asks for.
+1. **Evidence gaps:** there is no live-model run, real source rows come from one destination only, and there is none of the evaluation tooling the demo guide asks for.
 2. **Behavioural gaps:** a few checks are weaker than specified or missing.
    For example, gate-wait cost is always zero, alternate-fuel reachability is not checked separately, and turnaround minimum is only enforced through the capacity CSV.
-3. **Scope additions:** the blueprint does not ask for the airport-capacity CSV checks, the gate-occupancy inputs, editable prompts or the React frontend.
+3. **Scope additions:** the blueprint does not ask for the airport-capacity CSV checks, the gate-occupancy inputs, editable prompts, the flight catalogue or the React frontend.
 4. **Structural and naming differences:** these are harmless but worth knowing when reading the blueprint against the code.
 
 ## 1. Evidence gaps
@@ -34,22 +35,22 @@ The deviations fall into four groups:
 | Blueprint / guide requirement | Current state | Where |
 | --- | --- | --- |
 | Section 18 milestone 4 and guide sections 4 and 9: a live negotiation with three real independent acceptances | The Claude adapter exists and is tested only against a mocked SDK. No live run is recorded and no saved trace is checked in. The README says a real smoke test "remains separate". | `src/bootchicks/providers.py`, `tests/test_blueprint_negotiation.py::test_claude_adapter_makes_six_separate_typed_requests` |
-| Guide section 5: spread cases across at least three genuine qualifying rows | There is one genuine row (UA 1590 ORD-DFW, 2015-01-01, CSV line 3121). The selector only supports DFW with DAL as alternate, so no other destination can be selected. | `ingestion.py:207`, `data/fixtures/real_trigger.json` |
+| Guide section 5: spread cases across at least three genuine qualifying rows | One genuine row is checked in (UA 1590 ORD-DFW, 2015-01-01, CSV line 3121). `bootchicks import-flights` catalogues all 17,310 supported disrupted rows and the web app can run any of them, but none is part of a saved evaluation. The selector only supports DFW with DAL as alternate, so every row is a DFW arrival. | `ingestion.py:206`, `catalog.py`, `data/fixtures/real_trigger.json` |
 | Guide section 5: E1-E6 case runner or saved evaluation table, with run IDs and denominators | There is no case runner, saved evaluation table or aggregate metrics (consensus count, invalid-response count, median/worst latency). E1, E3 and E4 exist as CLI scenarios. E2 is possible through `--gate-occupancies`. E5 and E6 are only exercised in pytest, with no labelled fault-injection mode in the CLI or API. | `cli.py`, `tests/` |
-| Guide section 6: a planner-only comparison using the same scoring policy | Not implemented. The only deterministic planner is the fallback, which uses the fuel-first `fallback_rank` rather than `fairness_rank`, so it cannot isolate the agents' contribution. | `constraints.py:570-592` |
-| Guide section 4 Step D: `Operational use: SIMULATION ONLY` and a human-review status | `RunResult` has no operational-use or review field. Human review only appears as `human_review_required: true` inside the `NO_VALIDATED_PLAN` event. | `schemas.py:467`, `negotiation.py:349` |
+| Guide section 6: a planner-only comparison using the same scoring policy | Not implemented. The only deterministic planner is the fallback, which uses the fuel-first `fallback_rank` rather than `fairness_rank`, so it cannot isolate the agents' contribution. | `constraints.py:570-593` |
+| Guide section 4 Step D: `Operational use: SIMULATION ONLY` and a human-review status | `RunResult` has no operational-use or review field. Human review only appears as `human_review_required: true` inside the `NO_VALIDATED_PLAN` event. | `schemas.py:471`, `negotiation.py:341` |
 | Guide section 7: compact baseline/result export | `improvement_metrics` and the full `baseline` evaluation are in the JSON result. There is no compact table or report output. | `constraints.py:595` |
-| Guide sections 4 and 9: backup recorded replay | Replay mode exists, but no recording is checked in or prepared. | `providers.py:175` |
+| Guide sections 4 and 9: backup recorded replay | Replay mode exists, but no recording is checked in or prepared. | `providers.py:197` |
 
 ## 2. Behavioural deviations
 
 ### 2.1 Ingestion and replay
 
-- **Time zones live in code, not in operational profiles (section 4.6).**
-  `ingestion.py:39-58` keeps a hardcoded `TIMEZONES` dict.
+- **Time zones live in a global table, not in operational profiles (section 4.6).**
+  `ingestion.py:38-49` reads `data/constraints/airport_timezones.csv`, which covers all 322 airports and is generated by `scripts/airport_timezones.py`.
   The `Airport.timezone` field in the scenario JSON exists but normalization does not use it.
 - **Earliest touchdown uses a hardcoded 8-minute taxi (section 4.6, "a profile taxi duration").**
-  `ingestion.py:159` subtracts a constant 8 minutes.
+  `ingestion.py:150` subtracts a constant 8 minutes.
   It happens to equal the Bravo/Charlie path duration, but it is not read from the profile.
 - **Destination is hardcoded to DFW/DAL (section 4.5).**
   The selector rejects every non-DFW row as `NO_DESTINATION_OR_ALTERNATE_PROFILE` before it checks lookups.
@@ -61,7 +62,7 @@ The deviations fall into four groups:
   `scenario_id` is on `WorkflowInput` and `profile_version` is on the snapshot, but neither is in `Provenance`.
 - **The alternate lookup travels inside provenance.**
   `airport_rows` holds exactly origin and destination.
-  The DAL row is carried in `provenance.raw_lookups["alternate"]`, and `load_snapshot` requires it there (`scenario.py:55-61`).
+  The DAL row is carried in `provenance.raw_lookups["alternate"]`, and `load_snapshot` requires it there (`scenario.py:78-84`).
 - **The trigger's default mode is `stub` and there is an extra `fallback` mode.**
   The blueprint's illustration uses `"mode": "live"` and lists `live`/`stub`/`recorded_replay`.
   `Mode` adds `fallback` (`schemas.py:21`).
@@ -125,13 +126,13 @@ The deviations fall into four groups:
 ### 2.4 Protocol, contracts and limits (sections 8 and 9)
 
 - **Some text fields are unbounded (section 8).**
-  Items in `requested_concessions`, `reason_codes`, `proposal_references`, `accepted_concessions` and `ConstraintReference.constraint_id` have list-size limits but no string `max_length` (`schemas.py:416-440`).
+  Items in `requested_concessions`, `reason_codes`, `proposal_references`, `accepted_concessions` and `ConstraintReference.constraint_id` have list-size limits but no string `max_length` (`schemas.py:420-444`).
   Only `rationale` has a maximum length (1,000).
 - **"Inconsistent decisions" is not defined or checked (section 8).**
   Completeness, ranks, hashes and references are validated.
   Nothing checks, for example, that accepted candidates rank above rejected ones.
 - **The cross-domain reference rule is stricter than the blueprint.**
-  Every vote must cite at least one other role's proposal message (`negotiation.py:109-113`).
+  Every vote must cite at least one other role's proposal message (`negotiation.py:110-114`).
   The blueprint asks for references but does not make them mandatory per vote.
 - **Agents author the hard/soft classification.**
   Constraint IDs are checked against the server's list, but the agent's `classification` is not compared with the server's own classification.
@@ -143,7 +144,7 @@ The deviations fall into four groups:
   The limit is structural, and `RunResult` rejects `rounds_used > 2`.
 - **The stale-snapshot reason is merged.**
   Section 10 asks for `STALE_SNAPSHOT`, and the section 17 pseudocode uses `COMMIT_REVALIDATION_FAILED`.
-  The implementation emits a single `STALE_SNAPSHOT_OR_COMMIT_REVALIDATION_FAILED` (`negotiation.py:504`), so the two cases cannot be told apart in the result.
+  The implementation emits a single `STALE_SNAPSHOT_OR_COMMIT_REVALIDATION_FAILED` (`negotiation.py:505`), so the two cases cannot be told apart in the result.
 - **There are extra terminal reasons.**
   `PROVIDER_OR_PROTOCOL_ERROR`, `TOTAL_DEADLINE_EXCEEDED`, `DETERMINISTIC_ONLY`, `FALLBACK_COMMIT_FAILED` and `FALLBACK_ERROR` extend the blueprint's set.
   The status enum adds `FAILED` for interrupted or crashed jobs.
@@ -154,7 +155,7 @@ The deviations fall into four groups:
 ### 2.5 Fallback (section 12)
 
 - **Escalation evidence omits alternates.**
-  When nothing is feasible, `NO_VALIDATED_PLAN` records failed checks for destination actions only (`negotiation.py:333`).
+  When nothing is feasible, `NO_VALIDATED_PLAN` records failed checks for destination actions only (`negotiation.py:324-336`).
   The alternate options that were also rejected are not recorded.
 - **Escalated results carry no constraint report.**
   `RunResult.evaluation` is `None` for `ESCALATED`.
@@ -163,7 +164,7 @@ The deviations fall into four groups:
 ### 2.6 Stub agent
 
 - **The stub carries fixture knowledge.**
-  It skips path `Alpha` by name and picks B2/C2 or A1/C1 directly (`providers.py:84-112`).
+  It skips path `Alpha` by name and picks B2/C2 or A1/C1 directly (`providers.py:105-121`).
 - **The stub accepts every feasible candidate.**
   Stub consensus therefore never exercises disagreement.
   Disagreement is covered by pytest providers instead.
@@ -175,9 +176,10 @@ The deviations fall into four groups:
 | --- | --- |
 | React frontend in `frontend/` | Section 2 and section 18 exclude UI work. It is a client of the backend API only and shows the blueprint's two-round protocol; it has no negotiation logic of its own. `bootchicks serve` serves the built app at `/`. |
 | Challenge airport-capacity CSV | `data/constraints/airport_capacity.csv` and `capacity.py` import versioned synthetic limits into SQLite. This adds the checks `CAPACITY_ACTIVE_RUNWAYS`, `CAPACITY_GATE_TOTAL`, `CAPACITY_MIN_TURNAROUND`, `CAPACITY_RUNWAY_OPERATIONS` and `CAPACITY_SPARE_GATES`. |
+| Real flight catalogue | `bootchicks import-flights` scans the three CSVs once and stores each supported disrupted row with its raw fields, lookups and file hashes in SQLite. `GET /flights?q=` searches them and `GET /flights/{csv_line}` rebuilds the validated trigger. Section 4 only asks for a streaming selector. |
 | User-defined gate occupancies | `RunRequest.gate_occupancies` and `--gate-occupancies` inject extra gate reservations relative to the scenario clock. |
 | Extra API endpoints and fields | `GET /airport-capacities`, `GET /airport-capacities/{iata_code}` and `GET /options`. `POST /runs` also accepts a `RunRequest` wrapper as well as a bare `WorkflowInput`. `RunRequest.environment` starts a run in its own simulated environment so earlier commits do not block it. |
-| Synthetic failure scenarios | `insufficient_fuel`, `no_gate` and `diversion` are code-level overrides in `scenario.py:70-83`, not separate versioned scenario files. |
+| Synthetic failure scenarios | `insufficient_fuel`, `no_gate` and `diversion` are code-level overrides in `scenario.py:93-104`, not separate versioned scenario files. |
 | Editable prompts | `RunRequest.role_prompts` overrides the live system prompt per role. The prompts used are recorded in `ROUND_INPUT`, and agent messages carry `blueprint-agents-v3+custom-<hash>` when edited; defaults are `blueprint-agents-v3`. |
 
 ## 4. Structural and naming differences
@@ -213,5 +215,5 @@ Ordered by the demo guide's rubric weight and the effort each takes:
 1. Run and save at least one live negotiation and one live failure trace, plus a recorded replay backup.
 2. Add an E1-E6 case runner that writes a small evaluation table with run IDs and counts.
 3. Add `operational_use: SIMULATION_ONLY` and a human-review status to `RunResult`, and put the failed constraints into escalated results.
-4. Fix the behavioural gaps: separate the alternate-fuel/reachability check, distinguish `STALE_SNAPSHOT`, add string length limits, read the taxi duration and time zones from the profile, and either remove the gate-wait weight or model gate wait.
+4. Fix the behavioural gaps: separate the alternate-fuel/reachability check, distinguish `STALE_SNAPSHOT`, add string length limits, read the taxi duration and time zones from the profile instead of a constant and a global table, and either remove the gate-wait weight or model gate wait.
 5. Resolved: the Streamlit frontend and its legacy protocol were replaced by a React client of the backend.

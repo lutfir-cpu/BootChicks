@@ -20,7 +20,7 @@ npm run dev
 ```
 
 Open http://localhost:5173.
-The dev server forwards `/options`, `/runs` and `/airport-capacities` to the API on port 8000.
+The dev server forwards `/options`, `/flights`, `/runs` and `/airport-capacities` to the API on port 8000.
 
 For a single-process setup, run `npm run build` and `bootchicks serve` serves `frontend/dist` at `/`.
 
