@@ -1,5 +1,8 @@
+import atcChickWide from '../assets/images/chick-atc-wide.jpg'
 import atcChick from '../assets/images/chick-atc.jpg'
+import groundChickWide from '../assets/images/chick-ground-wide.jpg'
 import groundChick from '../assets/images/chick-ground.jpg'
+import pilotChickWide from '../assets/images/chick-pilot-wide.jpg'
 import pilotChick from '../assets/images/chick-pilot.jpg'
 import { actionText, clockTime, ROLE_NAMES } from '../labels'
 import { agentLog, agentStatus, skippedReason, type RunView } from '../trace'
@@ -98,6 +101,7 @@ function Decided({ agent, round }: { agent: AgentDecision; round: 1 | 2 }) {
 }
 
 const ROLE_CHICKS: Record<Role, string> = { ATC: atcChick, GROUND: groundChick, PILOT: pilotChick }
+const ROLE_CHICKS_WIDE: Record<Role, string> = { ATC: atcChickWide, GROUND: groundChickWide, PILOT: pilotChickWide }
 
 const IDLE_TEXT = { 1: 'Proposes up to three plans.', 2: 'Votes on every feasible plan.' }
 
@@ -133,7 +137,11 @@ export function AgentCard({ role, round, run }: { role: Role; round: 1 | 2; run:
         </p>
       )}
       <LogPanel label={`${name} round ${round} log`} lines={run ? agentLog(run, round, role) : []} />
-      {status === 'running' && <img className="agent-overlay" src={ROLE_CHICKS[role]} alt="" aria-hidden="true" />}
+      {status === 'running' && (
+        <div className="agent-overlay" aria-hidden="true">
+          <img src={ROLE_CHICKS_WIDE[role]} alt="" />
+        </div>
+      )}
     </article>
   )
 }

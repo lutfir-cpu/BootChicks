@@ -609,13 +609,19 @@ textarea {
 .agent-overlay {
   position: absolute;
   inset: 0;
-  width: 96px;
-  height: 96px;
-  margin: auto;
-  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  border-radius: inherit;
+  background: rgb(7 20 33 / 0.45);
+  pointer-events: none;
+}
+
+.agent-overlay img {
+  width: 128px;
+  height: 128px;
+  border-radius: 16px;
   object-fit: cover;
   opacity: 0.5;
-  pointer-events: none;
   animation: chick-pulse 1s ease-in-out infinite;
 }
 
@@ -661,6 +667,10 @@ textarea {
 
 .agent-body p {
   margin: 0 0 8px;
+}
+
+.agent-body .plan-row + p {
+  margin-top: 10px;
 }
 
 .provenance {
