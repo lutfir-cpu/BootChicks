@@ -67,7 +67,7 @@ def test_named_environments_start_fresh_while_shared_state_is_kept(tmp_path):
         repeat = submit(client, "c", mode="stub", environment="ui-1")
         assert first["result"]["status"] == second["result"]["status"] == "CONSENSUS"
         # The same environment already holds this flight's committed resources.
-        assert repeat["result"]["status"] == "ESCALATED"
+        assert repeat["result"]["status"] == "REVIEW_REQUIRED"
         assert (
             first["result"]["snapshot_version"] != second["result"]["snapshot_version"]
         )

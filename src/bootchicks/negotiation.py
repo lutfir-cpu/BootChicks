@@ -13,6 +13,7 @@ from .schemas import (
     ConsensusCertificate,
     ProtocolViolation,
     Provenance,
+    ReviewRecommendation,
     RoundOneResponse,
     RoundTwoResponse,
     RunRequest,
@@ -64,6 +65,32 @@ def baseline_for(snapshot, deadline):
     )
 
 
+def round_two_evaluation(evaluation):
+    """Keep the agent board small while preserving all data needed for a vote."""
+    return {
+        "candidate": evaluation.candidate.model_dump(mode="json"),
+        "feasible": evaluation.feasible,
+        "review_status": evaluation.review_status,
+        "failed_checks": [
+            {
+                "constraint_id": check.constraint_id,
+                "domain": check.domain,
+                "classification": check.classification,
+                "measured": check.measured,
+                "bound": check.bound,
+                "unit": check.unit,
+                "margin": check.margin,
+            }
+            for check in evaluation.checks
+            if not check.passed
+        ],
+        "outcomes": evaluation.outcomes.model_dump(mode="json")
+        if evaluation.outcomes
+        else None,
+        "domain_costs": evaluation.domain_costs,
+    }
+
+
 def validate_reply(role, number, response, snapshot, context):
     expected = RoundOneResponse if number == 1 else RoundTwoResponse
     response = expected.model_validate(
@@ -90,6 +117,10 @@ def validate_reply(role, number, response, snapshot, context):
             e["candidate"]["candidate_id"]: e["candidate"]["plan_hash"]
             for e in context["evaluations"]
         }
+        review_statuses = {
+            e["candidate"]["candidate_id"]: e["review_status"]
+            for e in context["evaluations"]
+        }
         if len(response.votes) != len(expected_hashes) or {
             v.candidate_id for v in response.votes
         } != set(expected_hashes):
@@ -107,6 +138,13 @@ def validate_reply(role, number, response, snapshot, context):
         for vote in response.votes:
             if expected_hashes.get(vote.candidate_id) != vote.plan_hash:
                 raise ProtocolViolation("UNKNOWN_PLAN_HASH")
+            allowed_decisions = {
+                "SAFE": {"ACCEPT", "REJECT"},
+                "REQUIRES_AUTHORIZATION": {"SUPPORT_IF_AUTHORIZED", "REJECT"},
+                "SAFETY_BLOCKED": {"SUPPORT_IF_REMEDIATED", "REJECT"},
+            }[review_statuses[vote.candidate_id]]
+            if vote.decision not in allowed_decisions:
+                raise ProtocolViolation("INVALID_CONDITIONAL_DECISION")
             if (
                 not set(vote.proposal_references) <= message_ids
                 or not set(vote.proposal_references) & other_ids
@@ -277,7 +315,7 @@ async def execute(store, run_id, request: RunRequest, provider=None) -> RunResul
     )
     accepting_messages = {}
 
-    def result_for(status, reason, selected=None, commit_id=None):
+    def result_for(status, reason, selected=None, commit_id=None, review=None):
         certificate = None
         if status == "CONSENSUS":
             certificate = ConsensusCertificate(
@@ -303,13 +341,15 @@ async def execute(store, run_id, request: RunRequest, provider=None) -> RunResul
             selected_plan=selected.candidate if selected else None,
             evaluation=selected,
             consensus_certificate=certificate,
+            review_recommendation=review,
+            human_review_required=status in ("REVIEW_REQUIRED", "ESCALATED"),
             fallback_reason=reason if status != "CONSENSUS" else None,
             baseline=baseline,
             improvement_metrics=improvement(baseline, selected),
             audit_event_reference=f"/runs/{run_id}/events",
         )
 
-    async def fallback(reason):
+    async def fallback(reason, review=None):
         nonlocal snapshot, baseline
         store.append(run_id, "FALLBACK_STARTED", {"reason": reason})
         try:
@@ -340,7 +380,22 @@ async def execute(store, run_id, request: RunRequest, provider=None) -> RunResul
                     "NO_VALIDATED_PLAN",
                     {"rejections": attempts, "human_review_required": True},
                 )
-                result = result_for("ESCALATED", "NO_VALIDATED_PLAN")
+                if review:
+                    store.append(
+                        run_id,
+                        "REVIEW_RECOMMENDATION",
+                        review.model_dump(mode="json"),
+                    )
+                    terminal_reason = (
+                        "HUMAN_AUTHORIZATION_REQUIRED"
+                        if review.required_action == "AUTHORIZE"
+                        else "SAFETY_REMEDIATION_REQUIRED"
+                    )
+                    result = result_for(
+                        "REVIEW_REQUIRED", terminal_reason, review=review
+                    )
+                else:
+                    result = result_for("ESCALATED", "NO_VALIDATED_PLAN")
                 store.finish(run_id, result)
                 return result
             winner = min(options, key=fallback_rank)
@@ -427,15 +482,19 @@ async def execute(store, run_id, request: RunRequest, provider=None) -> RunResul
             },
         )
         feasible = [e for e in evaluations if e.feasible]
-        if not feasible:
-            return await fallback("NO_FEASIBLE_PROPOSALS")
         summaries = {role: contexts[role]["domain"] for role in ROLES}
         second_contexts = {
             role: {
                 **contexts[role],
                 "proposal_board": board,
                 "cross_domain_constraints": summaries,
-                "evaluations": [e.model_dump(mode="json") for e in feasible],
+                "evaluations": [round_two_evaluation(e) for e in evaluations],
+                "vote_manifest": {
+                    "candidate_count": len(evaluations),
+                    "candidate_ids": [
+                        evaluation.candidate.candidate_id for evaluation in evaluations
+                    ],
+                },
             }
             for role in ROLES
         }
@@ -472,7 +531,50 @@ async def execute(store, run_id, request: RunRequest, provider=None) -> RunResul
                 "NO_UNANIMOUS_PLAN",
                 {"votes": {r: second[r].model_dump(mode="json") for r in ROLES}},
             )
-            return await fallback("NO_UNANIMOUS_PLAN")
+            conditional = []
+            required_decision = {
+                "REQUIRES_AUTHORIZATION": "SUPPORT_IF_AUTHORIZED",
+                "SAFETY_BLOCKED": "SUPPORT_IF_REMEDIATED",
+            }
+            for evaluation in evaluations:
+                decision = required_decision.get(evaluation.review_status)
+                if decision and all(
+                    any(
+                        vote.candidate_id == evaluation.candidate.candidate_id
+                        and vote.decision == decision
+                        for vote in second[role].votes
+                    )
+                    for role in ROLES
+                ):
+                    conditional.append(evaluation)
+            review = None
+            if conditional:
+                def review_rank(evaluation):
+                    costs = tuple(evaluation.domain_costs.values())
+                    return (
+                        evaluation.review_status == "SAFETY_BLOCKED",
+                        max(costs) if costs else float("inf"),
+                        sum(costs) if costs else float("inf"),
+                        evaluation.candidate.candidate_id,
+                    )
+
+                recommendation = min(conditional, key=review_rank)
+                required_action = (
+                    "AUTHORIZE"
+                    if recommendation.review_status == "REQUIRES_AUTHORIZATION"
+                    else "REMEDIATE"
+                )
+                review = ReviewRecommendation(
+                    candidate=recommendation.candidate,
+                    evaluation=recommendation,
+                    required_action=required_action,
+                    supporting_messages={
+                        event["payload"]["sender"]: event["event_id"]
+                        for event in vote_events
+                    },
+                )
+            reason = "NO_FEASIBLE_PROPOSALS" if not feasible else "NO_UNANIMOUS_PLAN"
+            return await fallback(reason, review)
         winner = min(
             (e for e in feasible if e.candidate.candidate_id in common),
             key=fairness_rank,

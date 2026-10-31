@@ -150,21 +150,25 @@ The deviations fall into four groups:
 - **Round 2 shares full domain state, not summaries.**
   `cross_domain_constraints` broadcasts each role's complete domain context.
   This is consistent with the guide's "do not claim privacy-preserving decentralisation".
+- **Round 2 includes failed candidates.**
+  Deterministic checks classify each candidate as `SAFE`, `REQUIRES_AUTHORIZATION` or `SAFETY_BLOCKED` under `mock-operational-review-v1`.
+  Agents can conditionally support failed candidates, but only `SAFE` unanimous plans can be committed.
 
 ### 2.5 Fallback (section 12)
 
 - **Escalation evidence omits alternates.**
   When nothing is feasible, `NO_VALIDATED_PLAN` records failed checks for destination actions only (`negotiation.py:333`).
   The alternate options that were also rejected are not recorded.
-- **Escalated results carry no constraint report.**
-  `RunResult.evaluation` is `None` for `ESCALATED`.
-  The failed constraints are only in the event log, not in the result's `hard_constraint_report` equivalent.
+- **Conditionally supported failures carry a separate review report.**
+  `RunResult.selected_plan` and `RunResult.evaluation` remain `None` because no plan was committed.
+  `RunResult.review_recommendation` carries the failed evaluation, required action and three supporting message references.
 
 ### 2.6 Stub agent
 
 - **The stub carries fixture knowledge.**
   It skips path `Alpha` by name and picks B2/C2 or A1/C1 directly (`providers.py:84-112`).
-- **The stub accepts every feasible candidate.**
+- **The stub supports every candidate using its deterministic status.**
+  It accepts safe candidates, supports authorization candidates if authorized and supports safety-blocked candidates if remediated.
   Stub consensus therefore never exercises disagreement.
   Disagreement is covered by pytest providers instead.
   This is acceptable for a labelled stub, but it is not evidence of negotiation.

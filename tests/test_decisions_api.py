@@ -44,8 +44,8 @@ def test_consensus_log_shows_inputs_proposals_votes_and_selection(tmp_path):
     vote = log["rounds"]["2"]["agents"]["GROUND"]["votes"][0]
     assert vote["decision"] == "ACCEPT" and vote["action"]["gate_id"]
     assert log["rounds"]["2"]["agents"]["ATC"]["given"][0] == {
-        "label": "Feasible plans to vote on",
-        "value": "3 of 4",
+        "label": "Evaluated plans to vote on",
+        "value": "4 of 4",
     }
 
     decision = log["decision"]
@@ -65,7 +65,7 @@ def test_consensus_log_shows_inputs_proposals_votes_and_selection(tmp_path):
     assert any(
         e["actor"] == "PILOT"
         and e["round"] == 2
-        and e["message"].startswith("Voted on 3 plans")
+        and e["message"].startswith("Voted on 4 plans")
         for e in timeline
     )
     assert timeline[-1]["message"].startswith("Run finished: Consensus.")
@@ -84,18 +84,23 @@ def test_runs_without_agents_explain_the_fallback(tmp_path):
     assert {e["actor"] for e in log["timeline"]} == {"SYSTEM"}
 
 
-def test_escalation_lists_the_most_common_failures(tmp_path):
+def test_review_required_lists_failures_and_non_committable_plan(tmp_path):
     with TestClient(create_app(tmp_path / "escalated.sqlite")) as client:
         state = submit(client, "e", mode="stub", scenario_id="insufficient_fuel")
         log = decisions(client, state)
-    assert log["status"] == "ESCALATED"
-    assert "2" not in log["rounds"]
+    assert log["status"] == "REVIEW_REQUIRED"
+    assert "2" in log["rounds"]
     assert (
         log["decision"]["fallback_reason"]
         == "None of the proposed plans passed every hard check."
     )
     rejections = log["decision"]["rejections"]
     assert rejections["plans"] > 0 and rejections["most_common"][0]["plans"] > 0
+    recommendation = log["decision"]["review_recommendation"]
+    assert recommendation["required_action"] == "REMEDIATE"
+    assert recommendation["review_status"] == "SAFETY_BLOCKED"
+    assert recommendation["failed_checks"]
+    assert log["decision"]["commit"] is None
 
 
 def test_an_agent_that_fails_is_shown_as_no_reply(tmp_path):

@@ -384,6 +384,8 @@ class CheckResult(Model):
     unit: str
     margin: float | None
     source_reference: str
+    classification: Literal["HARD_SAFETY", "AUTHORIZATION_REQUIRED"]
+    review_policy_version: str
 
 
 class Outcomes(Model):
@@ -411,6 +413,7 @@ class CandidateEvaluation(Model):
     outcomes: Outcomes | None
     domain_costs: dict[str, float]
     reservations: tuple[Reservation, ...]
+    review_status: Literal["SAFE", "REQUIRES_AUTHORIZATION", "SAFETY_BLOCKED"]
 
 
 class Proposal(Model):
@@ -436,7 +439,9 @@ class RoundOneResponse(Model):
 class Vote(Model):
     candidate_id: str
     plan_hash: str
-    decision: Literal["ACCEPT", "REJECT"]
+    decision: Literal[
+        "ACCEPT", "REJECT", "SUPPORT_IF_AUTHORIZED", "SUPPORT_IF_REMEDIATED"
+    ]
     preference_rank: int = Field(ge=1, le=9)
     reason_codes: tuple[str, ...] = Field(max_length=10)
     rationale: str = Field(min_length=1, max_length=1000)
@@ -468,10 +473,19 @@ class ConsensusCertificate(Model):
     commit_event_id: str
 
 
+class ReviewRecommendation(Model):
+    candidate: CandidatePlan
+    evaluation: CandidateEvaluation
+    required_action: Literal["AUTHORIZE", "REMEDIATE"]
+    supporting_messages: dict[str, str]
+
+
 class RunResult(Model):
     run_id: str
     schema_version: Literal["1.0"] = "1.0"
-    status: Literal["CONSENSUS", "FALLBACK", "ESCALATED", "FAILED"]
+    status: Literal[
+        "CONSENSUS", "FALLBACK", "REVIEW_REQUIRED", "ESCALATED", "FAILED"
+    ]
     terminal_reason: str
     mode: Mode
     source_provenance: Provenance
@@ -484,6 +498,9 @@ class RunResult(Model):
     selected_plan: CandidatePlan | None
     evaluation: CandidateEvaluation | None
     consensus_certificate: ConsensusCertificate | None
+    review_recommendation: ReviewRecommendation | None = None
+    human_review_required: bool = False
+    operational_use: Literal["SIMULATION_ONLY"] = "SIMULATION_ONLY"
     fallback_reason: str | None
     baseline: CandidateEvaluation | None
     improvement_metrics: dict[str, float] | None
@@ -522,6 +539,20 @@ class RunResult(Model):
                 )
         elif self.consensus_certificate is not None:
             raise ValueError("Only consensus may carry a consensus certificate.")
+        if self.status == "REVIEW_REQUIRED":
+            recommendation = self.review_recommendation
+            if (
+                recommendation is None
+                or recommendation.evaluation.feasible
+                or self.selected_plan is not None
+                or self.evaluation is not None
+                or not self.human_review_required
+            ):
+                raise ValueError(
+                    "Review-required results must remain non-committable and identify the failed report."
+                )
+        elif self.review_recommendation is not None:
+            raise ValueError("Only review-required results may carry a recommendation.")
         return self
 
 

@@ -113,11 +113,13 @@ Tail numbers are preserved exactly; an explicitly labelled aircraft-profile over
 - **Preparation:** validate and freeze the profile, build the bounded catalogue and calculate the same-model baseline.
 - **Round 1:** three independent role requests, each returning up to three complete preferred/compromise/concession actions.
 Code assigns hashes, deduplicates at most nine proposals, checks every domain and publishes the board.
-- **Round 2:** each role receives every proposal and the same evaluated feasible set, then accepts/rejects every candidate with exact hashes, unique ranks, cross-domain references and explicit concessions.
+- **Round 2:** each role receives every evaluated proposal, including failed ones, then accepts safe plans, conditionally supports authorization/remediation candidates, or rejects them using exact hashes, unique ranks, cross-domain references and explicit concessions.
 - **Selection:** intersect all three accepted sets.
 Among unanimous feasible candidates, minimize worst domain cost, then total cost, touchdown and candidate ID.
 Scales and weights are frozen in the scenario.
 No third round or post-vote candidate editing is allowed.
+- **Review:** deterministic code classifies failed checks under versioned policy as `AUTHORIZATION_REQUIRED` or `HARD_SAFETY`.
+A conditionally supported plan can be returned as a non-committable `REVIEW_REQUIRED` recommendation, but it never receives a consensus certificate or resource reservations.
 - **Commit:** under a SQLite write transaction, compare the snapshot/version, rerun every hard check, reserve all resources, create the certificate and persist the final result together.
 Changed state invalidates old votes and invokes deterministic fallback against fresh state.
 

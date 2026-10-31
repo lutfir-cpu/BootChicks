@@ -51,13 +51,19 @@ function ProposalRow({ proposal }: { proposal: Proposal }) {
 }
 
 function VoteRow({ vote }: { vote: Vote }) {
-  const accept = vote.decision === 'ACCEPT'
+  const supported = vote.decision !== 'REJECT'
+  const label = {
+    ACCEPT: 'Accept',
+    REJECT: 'Reject',
+    SUPPORT_IF_AUTHORIZED: 'Support if authorized',
+    SUPPORT_IF_REMEDIATED: 'Support if remediated',
+  }[vote.decision]
   return (
     <details className="plan-row">
       <summary>
         <span className="plan-text">{vote.action ? actionText(vote.action) : vote.candidate_id.slice(0, 8)}</span>
-        <span className={`plan-stance ${accept ? 'pass' : 'fail'}`}>
-          {accept ? 'Accept' : 'Reject'} · #{vote.preference_rank}
+        <span className={`plan-stance ${supported ? 'pass' : 'fail'}`}>
+          {label} · #{vote.preference_rank}
         </span>
       </summary>
       <div className="plan-fields">

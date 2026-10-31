@@ -835,6 +835,7 @@ textarea {
   --tint: #fbf1de;
 }
 
+.verdict-review_required,
 .verdict-escalated,
 .verdict-failed {
   --tone: var(--fail);
@@ -949,6 +950,12 @@ textarea {
   --tone: var(--warn);
 }
 
+.result-pill.verdict-review_required,
+.result-pill.verdict-escalated,
+.result-pill.verdict-failed {
+  --tone: var(--fail);
+}
+
 .result-pill:hover {
   background: color-mix(in srgb, var(--tone) 34%, var(--panel-dark));
 }
@@ -1003,6 +1010,28 @@ textarea {
 .rejections {
   margin: 0 0 8px;
   padding-left: 18px;
+}
+
+.review-warning {
+  margin-top: 24px;
+  padding: 18px 20px;
+  background: #f8e6e6;
+  border: 1px solid color-mix(in srgb, var(--fail) 35%, transparent);
+  border-radius: 10px;
+}
+
+.review-warning h4 {
+  margin: 0 0 8px;
+  color: var(--fail);
+  font-size: var(--text-md);
+}
+
+.review-warning p {
+  margin: 0 0 8px;
+}
+
+.review-warning .rejections {
+  margin: 0;
 }
 
 .checks {
@@ -1345,9 +1374,30 @@ a:focus-visible,
 
 @media (max-width: 540px) {
   .top-inner {
+    gap: 10px;
     padding: 14px 18px;
   }
 
+  .result-pill {
+    margin-left: 0;
+    padding: 8px 12px;
+  }
+
+  .result-pill strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .result-pill strong,
+  .trace-btn {
+    white-space: nowrap;
+  }
+
+  .trace-btn {
+    padding: 9px 11px;
+  }
+
+  .result-dot,
   .result-plan,
   .brand > span:last-child {
     display: none;

@@ -90,16 +90,16 @@ describe('trace', () => {
     expect(agentStatus(run, 1, 'ATC')).toBe('complete')
     expect(agentStatus(run, 2, 'GROUND')).toBe('complete')
     expect(boardStatus(run)).toBe('complete')
-    expect(agentLog(run, 2, 'PILOT')[1].message).toMatch(/^Voted on 3 plans/)
+    expect(agentLog(run, 2, 'PILOT')[1].message).toMatch(/^Voted on 4 plans/)
     expect(agentLog(run, 1, 'PILOT').every((line) => !line.message.startsWith('Voted'))).toBe(true)
     expect(systemLog(run).at(-1)?.message).toMatch(/^Run finished: Consensus/)
   })
 
-  it('skips round 2 after an escalation and says why', () => {
+  it('continues round 2 when every proposal needs review', () => {
     const run = finished(escalated)
     expect(agentStatus(run, 1, 'ATC')).toBe('complete')
-    expect(agentStatus(run, 2, 'ATC')).toBe('skipped')
-    expect(skippedReason(run)).toBe('Not reached. None of the proposed plans passed every hard check.')
+    expect(agentStatus(run, 2, 'ATC')).toBe('complete')
+    expect(run.result?.status).toBe('REVIEW_REQUIRED')
   })
 
   it('skips every agent step when the run used no agents', () => {
@@ -131,7 +131,7 @@ describe('replay', () => {
         steps: [2, 2, 1, 1, 2, 2, 2, 1, 1, 2][i],
       })),
     )
-    expect(keyframes(finished(escalated)).map((f) => f.sequence)).toEqual([3, 4, 5, 6, 7, Infinity])
+    expect(keyframes(finished(escalated)).map((f) => f.sequence)).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, Infinity])
     expect(keyframes(finished(fallback))).toEqual([{ sequence: Infinity, steps: 2 }])
     expect(keyframes({ log: finished(consensus).log, result: null }).at(-1)?.sequence).toBe(11)
   })

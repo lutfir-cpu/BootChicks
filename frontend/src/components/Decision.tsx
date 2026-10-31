@@ -14,6 +14,11 @@ import { systemLog, type RunView } from '../trace'
 import { ROLES, type CheckResult, type DecisionLog, type RunResult } from '../types'
 import { DataLine, Loading, LogPanel, RoleTag, StatusBadge } from './Layout'
 
+const CHECK_CLASS: Record<CheckResult['classification'], string> = {
+  HARD_SAFETY: 'Safety',
+  AUTHORIZATION_REQUIRED: 'Authorization',
+}
+
 export function DecisionCard({
   run,
   stale,
@@ -80,7 +85,9 @@ function Verdict({ result, log }: { result: RunResult; log: DecisionLog }) {
         <p className="verdict-plan">{planHeadline(plan.action, log.decision.commit?.runway_id)}</p>
       ) : (
         <p className="verdict-plan no-plan">
-          {result.status === 'ESCALATED' ? 'A human must decide.' : 'No decision was reached.'}
+          {result.status === 'ESCALATED' || result.status === 'REVIEW_REQUIRED'
+            ? 'A human must decide.'
+            : 'No decision was reached.'}
         </p>
       )}
       <p className="verdict-summary" aria-live="polite">
@@ -117,10 +124,39 @@ function Outcome({ result, log, stale }: { result: RunResult; log: DecisionLog; 
         </p>
       )}
       <ChosenPlan result={result} log={log} />
+      <ReviewWarning result={result} />
       <h4 className="subheading">How it was decided</h4>
       <Explanation log={log} />
       {result.evaluation && <Checks checks={result.evaluation.checks} />}
+      {result.review_recommendation && <Checks checks={result.review_recommendation.evaluation.checks} />}
     </>
+  )
+}
+
+function ReviewWarning({ result }: { result: RunResult }) {
+  const recommendation = result.review_recommendation
+  if (!recommendation) return null
+  const failed = recommendation.evaluation.checks.filter((check) => !check.passed)
+  const action = recommendation.candidate.action
+  const requiredAction = recommendation.required_action === 'AUTHORIZE' ? 'authorization' : 'remediation'
+  return (
+    <section className="review-warning" role="alert" aria-labelledby="review-warning-title">
+      <h4 id="review-warning-title">Do not execute - human review required</h4>
+      <p>
+        Plan <span className="mono">{recommendation.candidate.candidate_id.slice(0, 8)}</span> at{' '}
+        {clockTime(action.landing_slot)} is a non-committable recommendation. It requires human{' '}
+        {requiredAction} before it can be reconsidered.
+      </p>
+      <ul className="rejections">
+        {failed.map((check) => (
+          <li key={check.constraint_id}>
+            <strong className="mono">{check.constraint_id}</strong>: {formatCheckValue(check.measured, check.unit)} measured,
+            {' '}limit {formatCheckValue(check.bound, check.unit)}.{' '}
+            <span className="fail">{CHECK_CLASS[check.classification]}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 
@@ -199,7 +235,7 @@ function Checks({ checks }: { checks: CheckResult[] }) {
   return (
     <details className="checks">
       <summary>
-        <span className="subheading">Hard checks for the chosen plan</span>
+        <span className="subheading">Deterministic checks for the plan</span>
         <span className={failed ? 'fail' : 'pass'}>
           {failed ? `${failed} of ${checks.length} fail` : `All ${checks.length} pass`}
         </span>
@@ -210,6 +246,7 @@ function Checks({ checks }: { checks: CheckResult[] }) {
             <tr>
               <th>Check</th>
               <th>Owner</th>
+              <th>Class</th>
               <th>Measured</th>
               <th>Limit</th>
               <th className="num">Margin</th>
@@ -229,6 +266,7 @@ function Checks({ checks }: { checks: CheckResult[] }) {
                       <td>
                         <RoleTag role={role} />
                       </td>
+                      <td>{CHECK_CLASS[check.classification]}</td>
                       <td>{formatCheckValue(check.measured, check.unit)}</td>
                       <td>{formatCheckValue(check.bound, check.unit)}</td>
                       <td className="num">
