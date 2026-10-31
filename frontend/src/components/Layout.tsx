@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode, Ref } from 'react'
+import bootchickLogo from '../assets/images/bootchick.jpg'
 import { ROLE_NAMES } from '../labels'
 import type { CardStatus, LogLine } from '../trace'
 import type { Role } from '../types'
@@ -50,7 +51,7 @@ export function LogPanel({ label, lines, ref }: { label: string; lines: LogLine[
 export function Loading({ children }: { children: ReactNode }) {
   return (
     <p className="loading">
-      <span className="spinner" aria-hidden="true" /> {children}
+      <img className="loading-chick" src={bootchickLogo} alt="" aria-hidden="true" /> {children}
     </p>
   )
 }

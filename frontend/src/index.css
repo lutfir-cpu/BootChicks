@@ -691,19 +691,25 @@ textarea {
   font-size: var(--text-sm);
 }
 
-.spinner {
-  width: 15px;
-  height: 15px;
-  border: 2px solid var(--line);
-  border-top-color: var(--cyan);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
+.loading-chick {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--cyan);
+  border-radius: 5px;
+  background: #fff;
+  object-fit: cover;
+  animation: chick-pulse 1s ease-in-out infinite;
   flex: none;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
+@keyframes chick-pulse {
+  0%,
+  100% {
+    transform: scale(0.8);
+  }
+  50% {
+    transform: scale(1.1);
   }
 }
 
