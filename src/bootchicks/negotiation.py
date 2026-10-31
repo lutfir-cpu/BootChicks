@@ -7,10 +7,11 @@ from dataclasses import dataclass
 
 from .constraints import evaluate, fairness_rank, fallback_rank, improvement
 from .providers import PROMPT_VERSION, ClaudeProvider, ReplayProvider, StubProvider
-from .scenario import actions, candidate, catalogue, load_snapshot
+from .scenario import actions, candidate, catalogue, request_snapshot
 from .schemas import (
     ROLES,
     ConsensusCertificate,
+    ProtocolViolation,
     Provenance,
     RoundOneResponse,
     RoundTwoResponse,
@@ -72,18 +73,18 @@ def validate_reply(role, number, response, snapshot, context):
         response.sender != role
         or response.snapshot_version != snapshot.snapshot_version
     ):
-        raise ValueError("WRONG_SENDER_OR_SNAPSHOT")
+        raise ProtocolViolation("WRONG_SENDER_OR_SNAPSHOT")
     if number == 1:
         allowed = {digest(a) for a in actions(snapshot)}
         if any(digest(p.action) not in allowed for p in response.proposals):
-            raise ValueError("UNKNOWN_ACTION_OR_RESOURCE")
+            raise ProtocolViolation("UNKNOWN_ACTION_OR_RESOURCE")
         if len({p.label for p in response.proposals}) != len(response.proposals):
-            raise ValueError("DUPLICATE_PROPOSAL_LABEL")
+            raise ProtocolViolation("DUPLICATE_PROPOSAL_LABEL")
         if any(
             c.constraint_id not in context["allowed_constraint_ids"]
             for c in response.constraint_references
         ):
-            raise ValueError("UNKNOWN_CONSTRAINT_REFERENCE")
+            raise ProtocolViolation("UNKNOWN_CONSTRAINT_REFERENCE")
     else:
         expected_hashes = {
             e["candidate"]["candidate_id"]: e["candidate"]["plan_hash"]
@@ -92,11 +93,11 @@ def validate_reply(role, number, response, snapshot, context):
         if len(response.votes) != len(expected_hashes) or {
             v.candidate_id for v in response.votes
         } != set(expected_hashes):
-            raise ValueError("INCOMPLETE_OR_DUPLICATE_VOTE_SET")
+            raise ProtocolViolation("INCOMPLETE_OR_DUPLICATE_VOTE_SET")
         if {v.preference_rank for v in response.votes} != set(
             range(1, len(response.votes) + 1)
         ):
-            raise ValueError("INVALID_OR_DUPLICATE_RANKS")
+            raise ProtocolViolation("INVALID_OR_DUPLICATE_RANKS")
         message_ids = {m["event_id"] for m in context["proposal_board"]}
         other_ids = {
             m["event_id"]
@@ -105,12 +106,12 @@ def validate_reply(role, number, response, snapshot, context):
         }
         for vote in response.votes:
             if expected_hashes.get(vote.candidate_id) != vote.plan_hash:
-                raise ValueError("UNKNOWN_PLAN_HASH")
+                raise ProtocolViolation("UNKNOWN_PLAN_HASH")
             if (
                 not set(vote.proposal_references) <= message_ids
                 or not set(vote.proposal_references) & other_ids
             ):
-                raise ValueError("INVALID_CROSS_DOMAIN_REFERENCE")
+                raise ProtocolViolation("INVALID_CROSS_DOMAIN_REFERENCE")
     return response
 
 
@@ -159,11 +160,10 @@ async def role_round(
         try:
             reply = task.result()
         except Exception as exc:  # noqa: BLE001 - provider boundary, never serialize raw exceptions.
-            store.append(
-                run_id,
-                "AGENT_ABSENT",
-                {"round": number, "sender": role, "reason": type(exc).__name__},
-            )
+            absent = {"round": number, "sender": role, "reason": type(exc).__name__}
+            if isinstance(exc, ProtocolViolation):
+                absent["rule"] = str(exc)
+            store.append(run_id, "AGENT_ABSENT", absent)
             failed = True
             continue
         counts.responses += 1
@@ -181,7 +181,7 @@ async def role_round(
             "response_origin": provider.origin,
             "provider": provider.name,
             "model": provider.model,
-            "prompt_version": PROMPT_VERSION,
+            "prompt_version": getattr(provider, "prompt_version", PROMPT_VERSION),
             "response": reply.model_dump(mode="json"),
         }
         event = store.append(run_id, "AGENT_MESSAGE", payload)
@@ -260,16 +260,8 @@ async def execute(store, run_id, request: RunRequest, provider=None) -> RunResul
         else Provenance(source_type="synthetic_fixture")
     )
     store.running(run_id)
-    scenario_id = (
-        request.trigger.scenario_id if request.trigger else request.scenario_id
-    )
     snapshot = store.load_or_seed(
-        load_snapshot(
-            scenario_id,
-            request.trigger,
-            capacities=store.airport_capacities(request.capacity_version),
-            gate_occupancies=request.gate_occupancies,
-        )
+        request_snapshot(request, store.airport_capacities(request.capacity_version))
     )
     baseline = None
     store.append(
@@ -389,17 +381,22 @@ async def execute(store, run_id, request: RunRequest, provider=None) -> RunResul
             if request.mode == "stub":
                 provider = StubProvider()
             elif request.mode == "live":
-                provider = ClaudeProvider()
+                provider = ClaudeProvider(request.role_prompts)
                 owned_provider = True
             elif request.mode == "recorded_replay":
                 provider = ReplayProvider(os.environ["BOOTCHICKS_REPLAY_FILE"])
         contexts = role_contexts(snapshot)
+        prompt_version = getattr(provider, "prompt_version", PROMPT_VERSION)
         # Contexts contain permitted normalized inputs and mock profiles, never historical final outcomes.
-        store.append(
-            run_id,
-            "ROUND_INPUT",
-            {"round": 1, "contexts": contexts, "prompt_version": PROMPT_VERSION},
-        )
+        round_input = {
+            "round": 1,
+            "contexts": contexts,
+            "prompt_version": prompt_version,
+        }
+        if getattr(provider, "system_prompts", None):
+            # Record the exact instructions each live role receives, including user edits.
+            round_input["system_prompts"] = provider.system_prompts
+        store.append(run_id, "ROUND_INPUT", round_input)
         first, board, failed = await role_round(
             store, run_id, snapshot, provider, 1, contexts, request, deadline, counts
         )
@@ -445,7 +442,11 @@ async def execute(store, run_id, request: RunRequest, provider=None) -> RunResul
         store.append(
             run_id,
             "ROUND_INPUT",
-            {"round": 2, "contexts": second_contexts, "prompt_version": PROMPT_VERSION},
+            {
+                "round": 2,
+                "contexts": second_contexts,
+                "prompt_version": prompt_version,
+            },
         )
         second, vote_events, failed = await role_round(
             store,

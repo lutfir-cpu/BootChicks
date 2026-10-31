@@ -1,7 +1,7 @@
 # Blueprint coverage
 
 The authoritative backend is `src/bootchicks`.
-The earlier Streamlit demo remains a separate legacy frontend in `frontend/`.
+The React web app in `frontend/` is a client of this backend.
 
 | Blueprint area | Implemented evidence |
 | --- | --- |

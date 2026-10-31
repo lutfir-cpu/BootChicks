@@ -8,6 +8,21 @@ This implements the supplied v0.1 backend blueprint.
 Every operational limit is a labelled mock assumption.
 No real clearances are issued and no airport systems are contacted.
 
+## Web app
+
+The **Arrival desk** React app in `frontend/` drives this backend.
+Pick a scenario and flight, choose fixture, Claude or no agents, block gates with busy periods and edit each agent's system prompt.
+Each run shows both negotiation rounds, the Python checks for every proposal, the vote matrix, the decision and the committed plan.
+
+```sh
+python -m pip install -e .
+cd frontend && npm install && npm run build && cd ..
+bootchicks serve
+```
+
+Then open http://127.0.0.1:8000.
+For frontend development, see [the frontend guide](frontend/README.md).
+
 ## Start with the verified real-data fixture
 
 Python 3.11+ on macOS/Linux:
@@ -154,11 +169,17 @@ bootchicks serve --port 8000 --database data/runs/api.sqlite
 ```
 
 Open [interactive API documentation](http://127.0.0.1:8000/docs).
+If `frontend/dist` has been built, the web app is served at `/`; `--frontend-dir` points elsewhere.
 The server binds only to localhost.
 This MVP has no authentication or deployment scope.
 
 - `POST /runs` requires `Idempotency-Key`, accepts either a complete `WorkflowInput` trigger or a `RunRequest` wrapper and returns HTTP 202 with a run ID.
-The wrapper can select a labelled synthetic scenario or contain `trigger`, `mode`, deadline settings, `capacity_version` and `gate_occupancies`.
+The wrapper can select a labelled synthetic scenario or contain `trigger`, `mode`, deadline settings, `capacity_version`, `gate_occupancies`, `environment` and `role_prompts`.
+- `environment` (letters, digits, `-` and `_`) starts the run in its own simulated environment, so earlier commits do not block it; the web app sends a new one per run.
+- `role_prompts` replaces the system prompt of any of `ATC`, `PILOT` and `GROUND` for live Claude runs (nonblank, at most 8,000 characters).
+The prompts used are recorded in the round 1 `ROUND_INPUT` event, and agent messages carry a `prompt_version` such as `blueprint-agents-v3+custom-<hash>` when edited.
+Fixture and replay runs ignore them.
+- `GET /options` lists scenarios with their airports and gates, the default prompts, whether live mode has an API key and the verified real-flight trigger.
 - `GET /airport-capacities` lists the imported capacity rows; `GET /airport-capacities/{iata_code}` returns one airport or 404.
 - `GET /runs/{id}` returns queued/running/terminal state and the saved result.
 - `GET /runs/{id}/events` returns ordered events; `?format=jsonl` exports JSONL.
@@ -175,7 +196,7 @@ A CLI run cannot take ownership of the same database while its API worker is act
 ```sh
 bootchicks export RUN_ID --format jsonl --output data/runs/events.jsonl
 bootchicks export RUN_ID --format json --output data/runs/result.json
-python -m pip install -e '.[dev,legacy-ui]'
+python -m pip install -e '.[dev]'
 python -m pytest -q
 ruff check .
 ```
@@ -192,13 +213,4 @@ Mismatched state or incomplete recordings fail closed into fallback.
 Tests exercise the genuine selected row, all three schemas, strict thresholds, DST/midnight, fuel/separation/capacity/interval boundaries, unsafe plans, complete vote sets, cross-domain references, stale state, competing runs, cancellation, idempotency, restart recovery, HTTP export and deterministic replay.
 They mock provider traffic and do not require a paid API key.
 A real live-model smoke test remains separate.
-
-## Existing Streamlit demo
-
-Browse the [app screenshots and PR embed Markdown](docs/screenshots/README.md).
-
-The original single-candidate web demo remains available for reference; it does not implement the new proposal-board protocol.
-Its code, sample data and tests live in `frontend/`, separate from the `src/bootchicks` backend.
-Its instructions are in [the frontend guide](frontend/README.md).
-Install `.[legacy-ui]` to run it.
-The frontend lets you view, edit and reset the system prompt of each Claude role.
+Frontend checks are described in [the frontend guide](frontend/README.md).

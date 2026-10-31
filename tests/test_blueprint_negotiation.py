@@ -348,7 +348,7 @@ async def test_claude_adapter_makes_six_separate_typed_requests(tmp_path, monkey
 
     class FakeClient:
         def __init__(self, **kwargs):
-            assert kwargs == {"timeout": 12, "max_retries": 0}
+            assert kwargs == {"timeout": 120, "max_retries": 0}
             self.messages = SimpleNamespace(parse=self.parse)
 
         async def parse(self, **kwargs):

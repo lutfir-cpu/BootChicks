@@ -31,6 +31,10 @@ def digest(value) -> str:
     ).hexdigest()
 
 
+class ProtocolViolation(ValueError):
+    """An agent reply broke a message rule; the code names the rule and is safe to record."""
+
+
 class Model(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
@@ -581,6 +585,20 @@ class RunRequest(Model):
     total_timeout_seconds: float = Field(default=30, gt=0, le=300)
     capacity_version: str | None = None
     gate_occupancies: tuple[GateOccupancy, ...] = Field(default=(), max_length=500)
+    # A named environment starts from fresh scenario reservations instead of sharing earlier commits.
+    environment: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    # Per-role system prompt overrides for live Claude calls; unset roles use the defaults.
+    role_prompts: dict[Role, str] = Field(default_factory=dict)
+
+    @field_validator("role_prompts")
+    @classmethod
+    def usable_prompts(cls, values):
+        for role, prompt in values.items():
+            if not prompt.strip():
+                raise ValueError(f"System prompt for {role} is empty.")
+            if len(prompt) > 8000:
+                raise ValueError(f"System prompt for {role} exceeds 8,000 characters.")
+        return values
 
     @field_validator("gate_occupancies")
     @classmethod

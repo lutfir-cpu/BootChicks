@@ -3,20 +3,84 @@
 import asyncio
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import FastAPI, Header, HTTPException, Response
+from fastapi.staticfiles import StaticFiles
 
+from .decisions import decision_log
 from .negotiation import execute
-from .scenario import load_snapshot
+from .providers import DEFAULT_PROMPTS, PROMPT_VERSION
+from .scenario import DATA_DIR, SCENARIOS, load_snapshot, request_snapshot
 from .schemas import RunRequest, WorkflowInput
 from .store import IdempotencyConflict, Store
 
+SAMPLE_TRIGGER = DATA_DIR / "fixtures/real_trigger.json"
 
-def create_app(database=None, provider_factory=None):
+
+def minutes_after(clock, moment):
+    return round((moment - clock).total_seconds() / 60)
+
+
+def scenario_options():
+    """Describe each scenario's simulated state so clients can show it and offer valid busy periods.
+
+    Times are minutes after the scenario clock, so they also hold for a real flight trigger,
+    which shifts every timestamp of the scenario to that flight's arrival.
+    """
+    options = []
+    for scenario_id, text in SCENARIOS.items():
+        snapshot = load_snapshot(scenario_id)
+        aircraft = snapshot.aircraft
+        options.append(
+            {
+                "id": scenario_id,
+                **text,
+                "preferred_gate": snapshot.preferred_gate,
+                "window_min": minutes_after(snapshot.clock, snapshot.valid_until),
+                "aircraft": {
+                    "type_label": aircraft.type_label,
+                    "fuel_kg": aircraft.fuel_kg,
+                    "protected_landing_kg": aircraft.protected_landing_kg,
+                },
+                "airports": [
+                    {
+                        "iata_code": airport.iata_code,
+                        "kind": kind,
+                        "gates": [gate.id for gate in airport.gates],
+                        "runways": [
+                            {
+                                "id": runway.id,
+                                "closed": [
+                                    {
+                                        "start_min": minutes_after(
+                                            snapshot.clock, w.start
+                                        ),
+                                        "end_min": minutes_after(snapshot.clock, w.end),
+                                    }
+                                    for w in runway.closed
+                                ],
+                            }
+                            for runway in airport.runways
+                        ],
+                        "crews": len(airport.crews),
+                    }
+                    for kind, airport in [
+                        ("destination", snapshot.destination),
+                        *(("alternate", a) for a in snapshot.alternates),
+                    ]
+                ],
+            }
+        )
+    return options
+
+
+def create_app(database=None, provider_factory=None, frontend_dir=None):
     database = database or os.getenv(
         "BOOTCHICKS_DATABASE", "data/runs/bootchicks.sqlite"
     )
+    frontend_dir = frontend_dir or os.getenv("BOOTCHICKS_FRONTEND_DIR")
 
     @asynccontextmanager
     async def lifespan(app):
@@ -67,11 +131,8 @@ def create_app(database=None, provider_factory=None):
             else payload
         )
         try:
-            load_snapshot(
-                request.trigger.scenario_id if request.trigger else request.scenario_id,
-                request.trigger,
-                capacities=app.state.store.airport_capacities(request.capacity_version),
-                gate_occupancies=request.gate_occupancies,
+            request_snapshot(
+                request, app.state.store.airport_capacities(request.capacity_version)
             )
             run_id, created = app.state.store.open_run(idempotency_key, request)
         except IdempotencyConflict as exc:
@@ -93,6 +154,30 @@ def create_app(database=None, provider_factory=None):
             return app.state.store.run(run_id)
         except KeyError as exc:
             raise HTTPException(404, "Run not found") from exc
+
+    @app.get("/runs/{run_id}/decisions")
+    async def read_decisions(run_id: str):
+        """What each agent was given, decided and why, then what Python decided; also while the run is live."""
+        try:
+            # Read the status first, so a finished run always comes with its complete trail.
+            state = app.state.store.run(run_id)
+            events = app.state.store.events(run_id)
+        except KeyError as exc:
+            raise HTTPException(404, "Run not found") from exc
+        return decision_log(state, events)
+
+    @app.get("/options")
+    async def read_options():
+        return {
+            "scenarios": scenario_options(),
+            "live_available": bool(os.getenv("ANTHROPIC_API_KEY")),
+            "model": os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5-5"),
+            "default_prompts": DEFAULT_PROMPTS,
+            "prompt_version": PROMPT_VERSION,
+            "sample_trigger": WorkflowInput.model_validate_json(
+                SAMPLE_TRIGGER.read_bytes()
+            ),
+        }
 
     @app.get("/airport-capacities")
     async def read_capacities():
@@ -118,4 +203,7 @@ def create_app(database=None, provider_factory=None):
             )
         return events
 
+    if frontend_dir and Path(frontend_dir, "index.html").is_file():
+        # Mounted last so API routes keep priority over the built single-page app.
+        app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
     return app
