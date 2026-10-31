@@ -29,7 +29,7 @@ export interface ScenarioOption {
   airports: ScenarioAirport[]
 }
 
-interface WorkflowInput {
+export interface WorkflowInput {
   scenario_id: string
   flight_row: Record<string, unknown> & {
     AIRLINE: string
@@ -46,6 +46,26 @@ interface WorkflowInput {
   airline_row: { AIRLINE: string }
   provenance: { csv_line: number | null }
   [key: string]: unknown
+}
+
+export interface FlightSummary {
+  csv_line: number
+  date: string
+  airline: string
+  airline_name: string
+  flight_number: string
+  origin: string
+  destination: string
+  /** HHMM local time, as in the DOT data. */
+  scheduled_arrival: number
+  delay_min: number
+}
+
+/** GET /flights; `imported` is null until `bootchicks import-flights` has run. */
+export interface FlightSearch {
+  imported: { rows: number; disrupted: number; supported: number } | null
+  matches: number
+  flights: FlightSummary[]
 }
 
 export interface Options {

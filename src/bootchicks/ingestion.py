@@ -35,27 +35,18 @@ TIME_FIELDS = {
     "SCHEDULED_ARRIVAL",
     "ARRIVAL_TIME",
 }
-# Explicit scenario configuration; never inferred from coordinates or airport prefixes.
-TIMEZONES = {
-    "DFW": "America/Chicago",
-    "DAL": "America/Chicago",
-    "ATL": "America/New_York",
-    "LAX": "America/Los_Angeles",
-    "SFO": "America/Los_Angeles",
-    "SEA": "America/Los_Angeles",
-    "ORD": "America/Chicago",
-    "JFK": "America/New_York",
-    "BOS": "America/New_York",
-    "DEN": "America/Denver",
-    "PHX": "America/Phoenix",
-    "IAH": "America/Chicago",
-    "DTW": "America/Detroit",
-    "MIA": "America/New_York",
-    "ANC": "America/Anchorage",
-    "PDX": "America/Los_Angeles",
-    "LAS": "America/Los_Angeles",
-    "MSP": "America/Chicago",
-}
+TIMEZONE_CSV = (
+    Path(__file__).resolve().parents[2] / "data/constraints/airport_timezones.csv"
+)
+
+
+def read_timezones(path=TIMEZONE_CSV):
+    """Explicit IANA zone per airport, from a committed table; never inferred at runtime."""
+    with open(path, newline="", encoding="utf-8") as stream:
+        return {row["IATA_CODE"]: row["TIMEZONE"] for row in csv.DictReader(stream)}
+
+
+TIMEZONES = read_timezones()
 
 
 def hhmm(value: int) -> tuple[int, int, int]:
@@ -183,7 +174,13 @@ def lookup_table(path: Path, headers, model):
     return typed, exact
 
 
-def select_row(directory: Path, mode="stub") -> WorkflowInput:
+def iter_triggers(directory: Path, mode="stub", stats=None, rejected=None):
+    """Yield a validated trigger for every disrupted flight the simulator supports, in file order.
+
+    Optional counters collect the rows and disrupted flights seen, and why each unsupported one was skipped.
+    """
+    stats = Counter() if stats is None else stats
+    rejected = Counter() if rejected is None else rejected
     airlines, airline_raw = lookup_table(
         directory / "airlines.csv", AIRLINE_HEADERS, RawAirline
     )
@@ -194,16 +191,17 @@ def select_row(directory: Path, mode="stub") -> WorkflowInput:
         name: file_hash(directory / name)
         for name in ("flights.csv", "airlines.csv", "airports.csv")
     }
-    rejected = Counter()
     with (directory / "flights.csv").open(newline="", encoding="utf-8-sig") as stream:
         reader = csv.DictReader(stream)
         if tuple(reader.fieldnames or ()) != FLIGHT_HEADERS:
             raise ValueError("FLIGHT_HEADERS_MISMATCH")
         for row in reader:
+            stats["rows"] += 1
             try:
                 f = parse_flight(row)
                 if not eligible(f):
                     continue
+                stats["disrupted"] += 1
                 if f.DESTINATION_AIRPORT != "DFW" or "DAL" not in airports:
                     rejected["NO_DESTINATION_OR_ALTERNATE_PROFILE"] += 1
                     continue
@@ -237,7 +235,13 @@ def select_row(directory: Path, mode="stub") -> WorkflowInput:
                     provenance=provenance,
                 )
                 normalize(trigger)
-                return trigger
+                yield trigger
             except ValueError as exc:
                 rejected[str(exc).splitlines()[0][:100]] += 1
+
+
+def select_row(directory: Path, mode="stub") -> WorkflowInput:
+    rejected = Counter()
+    for trigger in iter_triggers(directory, mode, rejected=rejected):
+        return trigger
     raise ValueError("NO_SUPPORTED_DEMO_ROW: " + str(dict(rejected)))

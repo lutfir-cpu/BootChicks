@@ -1,9 +1,19 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
+import { fetchFlight, searchFlights } from '../api'
 import { busyPeriodErrors, type BusyPeriod } from '../busyPeriods'
 import { formatNumber, ROLE_NAMES } from '../labels'
-import { ROLES, type Mode, type Options, type Role, type ScenarioAirport, type ScenarioOption } from '../types'
+import {
+  ROLES,
+  type FlightSearch,
+  type Mode,
+  type Options,
+  type Role,
+  type ScenarioAirport,
+  type ScenarioOption,
+  type WorkflowInput,
+} from '../types'
 
-export type FlightSource = 'synthetic' | 'sample'
+export type FlightSource = 'synthetic' | 'real'
 
 const MODES: { mode: Mode; label: string; hint: string }[] = [
   { mode: 'stub', label: 'Fixture agents', hint: 'Deterministic scripted roles. No API calls.' },
@@ -29,7 +39,6 @@ export function ScenarioControls({
   onMode: (mode: Mode) => void
 }) {
   const scenario = options.scenarios.find((s) => s.id === scenarioId)
-  const row = options.sample_trigger.flight_row
   return (
     <div className="input-column">
       <h2>Scenario controls</h2>
@@ -48,9 +57,7 @@ export function ScenarioControls({
         <label htmlFor="flight">Flight</label>
         <select id="flight" value={source} onChange={(e) => onSource(e.target.value as FlightSource)}>
           <option value="synthetic">Synthetic demo flight</option>
-          <option value="sample">
-            {row.AIRLINE} {row.FLIGHT_NUMBER}, {row.ORIGIN_AIRPORT} to {row.DESTINATION_AIRPORT}
-          </option>
+          <option value="real">Real flight (US DOT 2015)</option>
         </select>
       </div>
       <div className="field">
@@ -96,9 +103,15 @@ function hhmm(value: number): string {
   return `${text.slice(0, 2)}:${text.slice(2)}`
 }
 
-export function FlightRecord({ options, source }: { options: Options; source: FlightSource }) {
-  const trigger = options.sample_trigger
-  const row = trigger.flight_row
+export function FlightRecord({
+  source,
+  trigger,
+  onPick,
+}: {
+  source: FlightSource
+  trigger: WorkflowInput
+  onPick: (trigger: WorkflowInput) => void
+}) {
   if (source === 'synthetic') {
     return (
       <div className="input-column">
@@ -115,6 +128,7 @@ export function FlightRecord({ options, source }: { options: Options; source: Fl
       </div>
     )
   }
+  const row = trigger.flight_row
   const date = `${row.YEAR}-${String(row.MONTH).padStart(2, '0')}-${String(row.DAY).padStart(2, '0')}`
   return (
     <div className="input-column">
@@ -123,6 +137,7 @@ export function FlightRecord({ options, source }: { options: Options; source: Fl
         <span className="source-badge">US DOT dataset</span>
         <span className="source-badge">CSV line {trigger.provenance.csv_line}</span>
       </div>
+      <FlightPicker selected={trigger.provenance.csv_line} onPick={onPick} />
       <Fields
         fields={[
           ['Flight', `${row.AIRLINE} ${row.FLIGHT_NUMBER}`],
@@ -133,6 +148,74 @@ export function FlightRecord({ options, source }: { options: Options; source: Fl
           ['Arrival delay', row.ARRIVAL_DELAY === null ? 'Not recorded' : `${formatNumber(row.ARRIVAL_DELAY)} min`],
         ]}
       />
+    </div>
+  )
+}
+
+function FlightPicker({ selected, onPick }: { selected: number | null; onPick: (trigger: WorkflowInput) => void }) {
+  const [query, setQuery] = useState('')
+  const [found, setFound] = useState<FlightSearch | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let current = true
+    const timer = setTimeout(() => {
+      searchFlights(query).then(
+        (result) => current && (setFound(result), setError(null)),
+        (e: Error) => current && setError(e.message),
+      )
+    }, 200)
+    return () => {
+      current = false
+      clearTimeout(timer)
+    }
+  }, [query])
+
+  async function pick(csvLine: number) {
+    try {
+      onPick(await fetchFlight(csvLine))
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }
+
+  if (found && !found.imported) {
+    return (
+      <p className="field-hint">
+        Run <code>bootchicks import-flights</code> to choose from every disrupted 2015 arrival.
+      </p>
+    )
+  }
+  return (
+    <div className="field">
+      <label htmlFor="flight-search">Search disrupted DFW arrivals</label>
+      <input
+        id="flight-search"
+        type="search"
+        placeholder="Airline, flight, city or date"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      <select
+        aria-label="Matching flights"
+        size={6}
+        value={selected ?? ''}
+        onChange={(e) => pick(Number(e.target.value))}
+        className="flight-list"
+      >
+        {found?.flights.map((f) => (
+          <option key={f.csv_line} value={f.csv_line}>
+            {f.date} · {f.airline} {f.flight_number} · {f.origin} · +{f.delay_min} min
+          </option>
+        ))}
+      </select>
+      {found?.imported && (
+        <p className="field-hint">
+          {formatNumber(found.matches)} of {formatNumber(found.imported.supported)} flights
+          {found.matches > found.flights.length && `; showing the first ${found.flights.length}`}.
+        </p>
+      )}
+      {error && <p className="field-error">{error}</p>}
     </div>
   )
 }

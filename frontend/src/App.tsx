@@ -15,7 +15,7 @@ import {
 } from './components/Setup'
 import { STATUS_TEXT } from './labels'
 import type { RunView } from './trace'
-import { ROLES, type DecisionLog, type Mode, type Options, type Role, type RunRequest, type RunResult } from './types'
+import { ROLES, type DecisionLog, type Mode, type WorkflowInput, type Options, type Role, type RunRequest, type RunResult } from './types'
 
 const PROMPT_STORAGE_KEY = 'bootchicks.rolePrompts'
 const LIVE_BUDGET = { round_timeout_seconds: 60, total_timeout_seconds: 150 }
@@ -92,6 +92,8 @@ function loadPrompts(defaults: Record<Role, string>): Record<Role, string> {
 function Desk({ options }: { options: Options }) {
   const [scenarioId, setScenarioId] = useState(options.scenarios[0].id)
   const [source, setSource] = useState<FlightSource>('synthetic')
+  // The chosen real flight; starts at the verified sample until another is picked.
+  const [trigger, setTrigger] = useState<WorkflowInput>(options.sample_trigger)
   const [mode, setMode] = useState<Mode>('stub')
   const [busy, setBusy] = useState<BusyPeriod[]>([])
   const [prompts, setPrompts] = useState(() => loadPrompts(options.default_prompts))
@@ -123,9 +125,9 @@ function Desk({ options }: { options: Options }) {
       ...(mode === 'live'
         ? { role_prompts: editedPrompts, ...LIVE_BUDGET }
         : { role_prompts: {} }),
-      ...(source === 'sample' ? { trigger: { ...options.sample_trigger, scenario_id: scenarioId } } : {}),
+      ...(source === 'real' ? { trigger: { ...trigger, scenario_id: scenarioId } } : {}),
     }
-  }, [scenarioId, mode, busy, prompts, source, options])
+  }, [scenarioId, mode, busy, prompts, source, trigger, options])
   const fingerprint = JSON.stringify(request)
 
   async function run() {
@@ -160,8 +162,8 @@ function Desk({ options }: { options: Options }) {
         ? { log: phase.log, result: null }
         : null
 
-  const row = options.sample_trigger.flight_row
-  const flight = source === 'sample' ? `${row.AIRLINE} ${row.FLIGHT_NUMBER}` : 'Demo flight'
+  const row = trigger.flight_row
+  const flight = source === 'real' ? `${row.AIRLINE} ${row.FLIGHT_NUMBER}` : 'Demo flight'
   const [statusText, statusTone] =
     phase.kind === 'running'
       ? ['Negotiating', 'running']
@@ -199,7 +201,7 @@ function Desk({ options }: { options: Options }) {
               onSource={setSource}
               onMode={setMode}
             />
-            <FlightRecord options={options} source={source} />
+            <FlightRecord source={source} trigger={trigger} onPick={setTrigger} />
             <AirportState scenario={scenario} />
           </div>
           <div className="input-columns two">

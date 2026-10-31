@@ -1,4 +1,4 @@
-import type { DecisionLog, Options, RunRequest, RunResult, RunState } from './types'
+import type { DecisionLog, FlightSearch, Options, RunRequest, RunResult, RunState, WorkflowInput } from './types'
 
 export class ApiError extends Error {}
 
@@ -32,6 +32,14 @@ async function errorMessage(response: Response): Promise<string> {
 
 export function fetchOptions(): Promise<Options> {
   return request('/options')
+}
+
+export function searchFlights(query: string): Promise<FlightSearch> {
+  return request(`/flights?${new URLSearchParams({ q: query, limit: '50' })}`)
+}
+
+export function fetchFlight(csvLine: number): Promise<WorkflowInput> {
+  return request(`/flights/${csvLine}`)
 }
 
 export function startRun(body: RunRequest, idempotencyKey: string): Promise<{ run_id: string }> {
