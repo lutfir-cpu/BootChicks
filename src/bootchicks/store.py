@@ -44,6 +44,20 @@ class Store:
                     row_json TEXT NOT NULL,
                     PRIMARY KEY(source_version, iata_code)
                 );
+                CREATE TABLE IF NOT EXISTS flight_import (
+                    id INTEGER PRIMARY KEY CHECK (id = 1), imported_at TEXT NOT NULL,
+                    file_sha256 TEXT NOT NULL, rows INTEGER NOT NULL,
+                    disrupted INTEGER NOT NULL, supported INTEGER NOT NULL,
+                    skipped TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS flights (
+                    csv_line INTEGER PRIMARY KEY, flight_date TEXT NOT NULL,
+                    airline TEXT NOT NULL, flight_number TEXT NOT NULL,
+                    origin TEXT NOT NULL, destination TEXT NOT NULL,
+                    scheduled_arrival INTEGER NOT NULL, delay_min INTEGER NOT NULL,
+                    search TEXT NOT NULL, raw_flight TEXT NOT NULL,
+                    raw_lookups TEXT NOT NULL
+                );
             """)
         self.capacity_version = self.import_airport_capacities()
 

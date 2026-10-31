@@ -273,6 +273,7 @@ legend.section-title + * {
 
 select,
 input[type='number'],
+input[type='search'],
 textarea,
 .field-value {
   display: block;
@@ -285,6 +286,17 @@ textarea,
   border-radius: 6px;
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+
+.flight-list {
+  margin-top: 6px;
+  padding: 4px;
+  font: 11px/1.5 var(--mono);
+}
+
+.flight-list option {
+  padding: 3px 5px;
+  border-radius: 4px;
 }
 
 textarea {

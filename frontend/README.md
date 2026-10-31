@@ -26,7 +26,7 @@ For a single-process setup, run `npm run build` and `bootchicks serve` serves `f
 
 ## What the app does
 
-- **Scenario** and **flight**: the four backend scenarios, with either the synthetic demo flight or the verified UA 1590 record (US DOT, 1 January 2015).
+- **Scenario** and **flight**: the four backend scenarios, with either the synthetic demo flight or a real disrupted DFW arrival from the US DOT 2015 data, searchable once `bootchicks import-flights` has run (otherwise the verified UA 1590 record).
 - **Agents**: fixture agents (no API calls), Claude agents (needs `ANTHROPIC_API_KEY` in the repository's `.env`) or no agents (deterministic planner only).
 - **Gate busy periods**: block DFW or DAL gates in half-open minute intervals after the scenario start.
 Backwards and overlapping periods are flagged next to the row and block the run; the backend checks again.
