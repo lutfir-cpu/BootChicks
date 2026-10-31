@@ -1,7 +1,9 @@
 import json
 from pathlib import Path
 
-from streamlit.testing.v1 import AppTest
+import pytest
+
+AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
 
 APP = Path(__file__).resolve().parents[1] / "app.py"
 
@@ -41,6 +43,7 @@ def test_failure_scenarios_through_interface():
 
 
 def test_live_mode_without_credentials_is_clear(monkeypatch):
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     app = AppTest.from_file(str(APP)).run(timeout=20)
     app.radio[0].set_value("Claude agents").run()

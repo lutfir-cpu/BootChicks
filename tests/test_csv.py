@@ -1,5 +1,7 @@
 import pytest
 
+pytest.importorskip("pandas")
+
 from csv_import import eligible_flights
 
 

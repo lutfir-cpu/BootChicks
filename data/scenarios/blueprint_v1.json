@@ -1,0 +1,706 @@
+{
+  "schema_version": "1.0",
+  "scenario_id": "runway_closure_gate_conflict_v1",
+  "environment_id": "fixture-v1",
+  "version": 1,
+  "profile_version": "mock-airports-v1.1",
+  "clock": "2026-10-31T06:00:00Z",
+  "valid_until": "2026-10-31T08:00:00Z",
+  "flight_id": "SYNTHETIC-DEMO",
+  "preferred_gate": "A1",
+  "aircraft": {
+    "tail_number": null,
+    "type_label": "Mock narrowbody",
+    "mapping_source": "mock_fixture",
+    "wake_class": "M",
+    "gate_class": "M",
+    "crosswind_limit_knots": 25.0,
+    "turbulence_limit": 2.0,
+    "fuel_kg": 6000.0,
+    "hold_burn_kg_min": 40.0,
+    "taxi_burn_kg_min": 25.0,
+    "protected_landing_kg": 4000.0,
+    "protected_on_block_kg": 3800.0,
+    "fuel_policy_components": {
+      "landing": {
+        "alternate_allowance_kg": 1500,
+        "contingency_allowance_kg": 300,
+        "other_protected_kg": 2200
+      },
+      "on_block": {
+        "alternate_allowance_kg": 1500,
+        "contingency_allowance_kg": 300,
+        "other_protected_kg": 2000
+      }
+    },
+    "required_services": [
+      "turnaround"
+    ],
+    "fuel_policy_notes": "The two floors already include the listed mock alternate and contingency allowances. Compare them at touchdown and on-block; never subtract components again. Diversion fuel is evaluated separately from its configured approach duration and burn."
+  },
+  "destination": {
+    "iata_code": "DFW",
+    "timezone": "America/Chicago",
+    "lookup": {
+      "IATA_CODE": "DFW",
+      "AIRPORT": "Dallas/Fort Worth International Airport",
+      "CITY": "Dallas-Fort Worth",
+      "STATE": "TX",
+      "COUNTRY": "USA",
+      "LATITUDE": 32.89595,
+      "LONGITUDE": -97.0372
+    },
+    "slots": [
+      "2026-10-31T06:20:00Z",
+      "2026-10-31T06:25:00Z",
+      "2026-10-31T06:35:00Z",
+      "2026-10-31T06:45:00Z"
+    ],
+    "runways": [
+      {
+        "id": "R1",
+        "aircraft_classes": [
+          "M"
+        ],
+        "approach_ids": [
+          "standard",
+          "smooth"
+        ],
+        "closed": [
+          {
+            "start": "2026-10-31T06:00:00Z",
+            "end": "2026-10-31T06:22:00Z"
+          }
+        ],
+        "occupancy_seconds": 120,
+        "crosswind_knots": 8.0,
+        "weather_valid": {
+          "start": "2026-10-31T06:00:00Z",
+          "end": "2026-10-31T08:00:00Z"
+        }
+      },
+      {
+        "id": "R2",
+        "aircraft_classes": [
+          "M"
+        ],
+        "approach_ids": [
+          "standard",
+          "smooth"
+        ],
+        "closed": [
+          {
+            "start": "2026-10-31T06:00:00Z",
+            "end": "2026-10-31T08:00:00Z"
+          }
+        ],
+        "occupancy_seconds": 120,
+        "crosswind_knots": 8.0,
+        "weather_valid": {
+          "start": "2026-10-31T06:00:00Z",
+          "end": "2026-10-31T08:00:00Z"
+        }
+      }
+    ],
+    "approaches": [
+      {
+        "id": "standard",
+        "runway_ids": [
+          "R1",
+          "R2"
+        ],
+        "duration_seconds": 1200,
+        "burn_kg": 1200.0,
+        "turbulence": 1.0,
+        "valid": {
+          "start": "2026-10-31T06:00:00Z",
+          "end": "2026-10-31T08:00:00Z"
+        }
+      },
+      {
+        "id": "smooth",
+        "runway_ids": [
+          "R1",
+          "R2"
+        ],
+        "duration_seconds": 1320,
+        "burn_kg": 1250.0,
+        "turbulence": 0.0,
+        "valid": {
+          "start": "2026-10-31T06:00:00Z",
+          "end": "2026-10-31T08:00:00Z"
+        }
+      }
+    ],
+    "paths": [
+      {
+        "id": "Alpha",
+        "runway_id": "R1",
+        "gate_id": "B2",
+        "edge_ids": [
+          "direct"
+        ]
+      },
+      {
+        "id": "Bravo",
+        "runway_id": "R1",
+        "gate_id": "B2",
+        "edge_ids": [
+          "trunk",
+          "to-B2"
+        ]
+      },
+      {
+        "id": "Charlie",
+        "runway_id": "R1",
+        "gate_id": "A1",
+        "edge_ids": [
+          "trunk",
+          "to-A1"
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "id": "direct",
+        "start_node": "R1",
+        "end_node": "B2",
+        "duration_seconds": 480,
+        "capacity": 1,
+        "closed": [
+          {
+            "start": "2026-10-31T06:00:00Z",
+            "end": "2026-10-31T08:00:00Z"
+          }
+        ]
+      },
+      {
+        "id": "trunk",
+        "start_node": "R1",
+        "end_node": "junction",
+        "duration_seconds": 240,
+        "capacity": 1,
+        "closed": []
+      },
+      {
+        "id": "to-B2",
+        "start_node": "junction",
+        "end_node": "B2",
+        "duration_seconds": 240,
+        "capacity": 1,
+        "closed": []
+      },
+      {
+        "id": "to-A1",
+        "start_node": "junction",
+        "end_node": "A1",
+        "duration_seconds": 240,
+        "capacity": 1,
+        "closed": []
+      }
+    ],
+    "gates": [
+      {
+        "id": "A1",
+        "aircraft_classes": [
+          "M"
+        ],
+        "services": [
+          "turnaround"
+        ],
+        "available": [
+          {
+            "start": "2026-10-31T06:43:00Z",
+            "end": "2026-10-31T08:00:00Z"
+          }
+        ],
+        "buffer_seconds": 0
+      },
+      {
+        "id": "B2",
+        "aircraft_classes": [
+          "M"
+        ],
+        "services": [
+          "turnaround"
+        ],
+        "available": [
+          {
+            "start": "2026-10-31T06:30:00Z",
+            "end": "2026-10-31T08:00:00Z"
+          }
+        ],
+        "buffer_seconds": 0
+      },
+      {
+        "id": "C3",
+        "aircraft_classes": [
+          "H"
+        ],
+        "services": [
+          "turnaround"
+        ],
+        "available": [
+          {
+            "start": "2026-10-31T06:00:00Z",
+            "end": "2026-10-31T08:00:00Z"
+          }
+        ],
+        "buffer_seconds": 0
+      },
+      {
+        "id": "D4",
+        "aircraft_classes": [
+          "M"
+        ],
+        "services": [
+          "turnaround"
+        ],
+        "available": [
+          {
+            "start": "2026-10-31T07:30:00Z",
+            "end": "2026-10-31T08:00:00Z"
+          }
+        ],
+        "buffer_seconds": 0
+      }
+    ],
+    "crews": [
+      {
+        "id": "C1",
+        "skills": [
+          "turnaround"
+        ],
+        "gate_ids": [
+          "A1"
+        ],
+        "available": [
+          {
+            "start": "2026-10-31T06:43:00Z",
+            "end": "2026-10-31T08:00:00Z"
+          }
+        ],
+        "shift_end": "2026-10-31T07:20:00Z",
+        "max_overtime_seconds": 600
+      },
+      {
+        "id": "C2",
+        "skills": [
+          "turnaround"
+        ],
+        "gate_ids": [
+          "B2"
+        ],
+        "available": [
+          {
+            "start": "2026-10-31T06:30:00Z",
+            "end": "2026-10-31T08:00:00Z"
+          }
+        ],
+        "shift_end": "2026-10-31T07:25:00Z",
+        "max_overtime_seconds": 600
+      },
+      {
+        "id": "C3",
+        "skills": [
+          "turnaround"
+        ],
+        "gate_ids": [
+          "D4"
+        ],
+        "available": [
+          {
+            "start": "2026-10-31T06:00:00Z",
+            "end": "2026-10-31T08:00:00Z"
+          }
+        ],
+        "shift_end": "2026-10-31T07:20:00Z",
+        "max_overtime_seconds": 600
+      }
+    ],
+    "wake_separation_seconds": {
+      "M": {
+        "M": 120,
+        "H": 180
+      },
+      "H": {
+        "M": 180,
+        "H": 180
+      }
+    },
+    "rolling_arrival_limit": 4,
+    "sector_capacity": 2,
+    "sector_seconds": 600
+  },
+  "alternates": [
+    {
+      "iata_code": "DAL",
+      "timezone": "America/Chicago",
+      "lookup": {
+        "IATA_CODE": "DAL",
+        "AIRPORT": "Dallas Love Field",
+        "CITY": "Dallas",
+        "STATE": "TX",
+        "COUNTRY": "USA",
+        "LATITUDE": 32.84711,
+        "LONGITUDE": -96.85177
+      },
+      "slots": [
+        "2026-10-31T06:30:00Z",
+        "2026-10-31T06:40:00Z",
+        "2026-10-31T06:50:00Z"
+      ],
+      "runways": [
+        {
+          "id": "R1",
+          "aircraft_classes": [
+            "M"
+          ],
+          "approach_ids": [
+            "standard",
+            "smooth"
+          ],
+          "closed": [],
+          "occupancy_seconds": 120,
+          "crosswind_knots": 8.0,
+          "weather_valid": {
+            "start": "2026-10-31T06:00:00Z",
+            "end": "2026-10-31T08:00:00Z"
+          }
+        },
+        {
+          "id": "R2",
+          "aircraft_classes": [
+            "M"
+          ],
+          "approach_ids": [
+            "standard",
+            "smooth"
+          ],
+          "closed": [
+            {
+              "start": "2026-10-31T06:00:00Z",
+              "end": "2026-10-31T08:00:00Z"
+            }
+          ],
+          "occupancy_seconds": 120,
+          "crosswind_knots": 8.0,
+          "weather_valid": {
+            "start": "2026-10-31T06:00:00Z",
+            "end": "2026-10-31T08:00:00Z"
+          }
+        }
+      ],
+      "approaches": [
+        {
+          "id": "standard",
+          "runway_ids": [
+            "R1",
+            "R2"
+          ],
+          "duration_seconds": 1800,
+          "burn_kg": 1500.0,
+          "turbulence": 1.0,
+          "valid": {
+            "start": "2026-10-31T06:00:00Z",
+            "end": "2026-10-31T08:00:00Z"
+          }
+        },
+        {
+          "id": "smooth",
+          "runway_ids": [
+            "R1",
+            "R2"
+          ],
+          "duration_seconds": 1920,
+          "burn_kg": 1550.0,
+          "turbulence": 0.0,
+          "valid": {
+            "start": "2026-10-31T06:00:00Z",
+            "end": "2026-10-31T08:00:00Z"
+          }
+        }
+      ],
+      "paths": [
+        {
+          "id": "Alpha",
+          "runway_id": "R1",
+          "gate_id": "B2",
+          "edge_ids": [
+            "direct"
+          ]
+        },
+        {
+          "id": "Bravo",
+          "runway_id": "R1",
+          "gate_id": "B2",
+          "edge_ids": [
+            "trunk",
+            "to-B2"
+          ]
+        },
+        {
+          "id": "Charlie",
+          "runway_id": "R1",
+          "gate_id": "A1",
+          "edge_ids": [
+            "trunk",
+            "to-A1"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "direct",
+          "start_node": "R1",
+          "end_node": "B2",
+          "duration_seconds": 480,
+          "capacity": 1,
+          "closed": []
+        },
+        {
+          "id": "trunk",
+          "start_node": "R1",
+          "end_node": "junction",
+          "duration_seconds": 240,
+          "capacity": 1,
+          "closed": []
+        },
+        {
+          "id": "to-B2",
+          "start_node": "junction",
+          "end_node": "B2",
+          "duration_seconds": 240,
+          "capacity": 1,
+          "closed": []
+        },
+        {
+          "id": "to-A1",
+          "start_node": "junction",
+          "end_node": "A1",
+          "duration_seconds": 240,
+          "capacity": 1,
+          "closed": []
+        }
+      ],
+      "gates": [
+        {
+          "id": "A1",
+          "aircraft_classes": [
+            "M"
+          ],
+          "services": [
+            "turnaround"
+          ],
+          "available": [
+            {
+              "start": "2026-10-31T06:00:00Z",
+              "end": "2026-10-31T08:00:00Z"
+            }
+          ],
+          "buffer_seconds": 0
+        },
+        {
+          "id": "B2",
+          "aircraft_classes": [
+            "M"
+          ],
+          "services": [
+            "turnaround"
+          ],
+          "available": [
+            {
+              "start": "2026-10-31T06:00:00Z",
+              "end": "2026-10-31T08:00:00Z"
+            }
+          ],
+          "buffer_seconds": 0
+        },
+        {
+          "id": "C3",
+          "aircraft_classes": [
+            "H"
+          ],
+          "services": [
+            "turnaround"
+          ],
+          "available": [
+            {
+              "start": "2026-10-31T06:00:00Z",
+              "end": "2026-10-31T08:00:00Z"
+            }
+          ],
+          "buffer_seconds": 0
+        },
+        {
+          "id": "D4",
+          "aircraft_classes": [
+            "M"
+          ],
+          "services": [
+            "turnaround"
+          ],
+          "available": [
+            {
+              "start": "2026-10-31T06:00:00Z",
+              "end": "2026-10-31T08:00:00Z"
+            }
+          ],
+          "buffer_seconds": 0
+        }
+      ],
+      "crews": [
+        {
+          "id": "C1",
+          "skills": [
+            "turnaround"
+          ],
+          "gate_ids": [
+            "A1"
+          ],
+          "available": [
+            {
+              "start": "2026-10-31T06:00:00Z",
+              "end": "2026-10-31T08:00:00Z"
+            }
+          ],
+          "shift_end": "2026-10-31T08:00:00Z",
+          "max_overtime_seconds": 600
+        },
+        {
+          "id": "C2",
+          "skills": [
+            "turnaround"
+          ],
+          "gate_ids": [
+            "B2"
+          ],
+          "available": [
+            {
+              "start": "2026-10-31T06:00:00Z",
+              "end": "2026-10-31T08:00:00Z"
+            }
+          ],
+          "shift_end": "2026-10-31T08:00:00Z",
+          "max_overtime_seconds": 600
+        },
+        {
+          "id": "C3",
+          "skills": [
+            "turnaround"
+          ],
+          "gate_ids": [
+            "D4"
+          ],
+          "available": [
+            {
+              "start": "2026-10-31T06:00:00Z",
+              "end": "2026-10-31T08:00:00Z"
+            }
+          ],
+          "shift_end": "2026-10-31T08:00:00Z",
+          "max_overtime_seconds": 600
+        }
+      ],
+      "wake_separation_seconds": {
+        "M": {
+          "M": 120,
+          "H": 180
+        },
+        "H": {
+          "M": 180,
+          "H": 180
+        }
+      },
+      "rolling_arrival_limit": 4,
+      "sector_capacity": 2,
+      "sector_seconds": 600
+    }
+  ],
+  "connections": [
+    {
+      "passengers": 20,
+      "boarding_deadline": "2026-10-31T06:47:00Z",
+      "transfer_seconds_by_gate": {
+        "A1": 420,
+        "B2": 420,
+        "C3": 420,
+        "D4": 420
+      }
+    }
+  ],
+  "turnaround_seconds": 2700,
+  "next_departure_target": "2026-10-31T07:20:00Z",
+  "reservations": [
+    {
+      "resource": "runway:DFW:R1",
+      "interval": {
+        "start": "2026-10-31T05:55:00Z",
+        "end": "2026-10-31T05:57:00Z"
+      },
+      "flight_id": "BACKGROUND--5",
+      "wake_class": "M"
+    },
+    {
+      "resource": "arrival:DFW",
+      "interval": {
+        "start": "2026-10-31T05:55:00Z",
+        "end": "2026-10-31T05:57:00Z"
+      },
+      "flight_id": "BACKGROUND--5",
+      "wake_class": "M"
+    },
+    {
+      "resource": "runway:DFW:R1",
+      "interval": {
+        "start": "2026-10-31T07:00:00Z",
+        "end": "2026-10-31T07:02:00Z"
+      },
+      "flight_id": "BACKGROUND-60",
+      "wake_class": "M"
+    },
+    {
+      "resource": "arrival:DFW",
+      "interval": {
+        "start": "2026-10-31T07:00:00Z",
+        "end": "2026-10-31T07:02:00Z"
+      },
+      "flight_id": "BACKGROUND-60",
+      "wake_class": "M"
+    }
+  ],
+  "policy": {
+    "version": "mock-fairness-v1",
+    "scales": {
+      "delay_min": 60.0,
+      "taxi_min": 20.0,
+      "airborne_fuel_kg": 2000.0,
+      "gate_wait_min": 30.0,
+      "overtime_min": 10.0,
+      "next_departure_delay_min": 30.0
+    },
+    "atc_weights": [
+      0.6,
+      0.4
+    ],
+    "pilot_weights": [
+      0.6,
+      0.4
+    ],
+    "ground_weights": [
+      0.4,
+      0.3,
+      0.3
+    ]
+  },
+  "operational_provenance": {
+    "airport_lookup": "historical_csv: Kaggle airports.csv; identifiers only",
+    "runways": "mock_fixture: intervals UTC, durations seconds, crosswind knots; valid clock to valid_until",
+    "wake_policy": "mock_fixture: ordered leader/follower seconds, not regulatory minima; mock-airports-v1.1; valid clock to valid_until",
+    "aircraft": "mock_fixture: fuel kg, burn kg/min, wind knots, turbulence ordinal; valid clock to valid_until",
+    "taxi": "mock_fixture: edge duration/capacity/closure, seconds and UTC; valid clock to valid_until",
+    "ground": "mock_fixture: gate/crew intervals UTC, service/overtime seconds; valid clock to valid_until",
+    "connections": "mock_fixture: passenger counts and UTC deadlines; valid clock to valid_until",
+    "policy": "mock_fixture: fixed scales and weights, mock-fairness-v1"
+  }
+}

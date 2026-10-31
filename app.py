@@ -46,6 +46,9 @@ st.write("Three perspectives. One checkable arrival plan.")
 st.caption(
     "Hackathon simulation - one arriving flight, fixed background traffic, no live operational feeds."
 )
+st.caption(
+    "Earlier Streamlit demo. The blueprint's proposal-board negotiation is available through the BootChicks CLI and API; see README.md."
+)
 
 with st.sidebar:
     st.header("Start a replay")
