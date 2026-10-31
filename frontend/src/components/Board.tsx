@@ -64,9 +64,9 @@ export function ProposalBoard({ run }: { run: RunView | null }) {
           </table>
         </div>
       ) : (
-        <div className="output">
+        <div className="agent-body">
           {status === 'running' && <Loading>Checking every proposal...</Loading>}
-          {status === 'waiting' && <p className="empty-value">Waiting.</p>}
+          {status === 'waiting' && <p className="empty-value">Every proposed plan is checked here.</p>}
           {status === 'skipped' && run && <p className="empty-value">{skippedReason(run)}</p>}
         </div>
       )}

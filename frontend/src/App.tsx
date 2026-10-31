@@ -4,7 +4,8 @@ import { busyPeriodErrors, toOccupancies, type BusyPeriod } from './busyPeriods'
 import { AgentCard } from './components/Agents'
 import { ProposalBoard } from './components/Board'
 import { DecisionCard } from './components/Decision'
-import { BranchConnector, MergeConnector } from './components/Layout'
+import { BranchConnector, MergeConnector, PlaneIcon } from './components/Layout'
+import { planHeadline, STATUS_TEXT } from './labels'
 import {
   AirportState,
   BusyPeriodsEditor,
@@ -67,11 +68,18 @@ export default function App({ stepMs = STEP_MS }: { stepMs?: number }) {
 function Shell({
   onTrace,
   onSkip,
+  result,
+  runway,
+  onResult,
   focused,
   children,
 }: {
   onTrace?: () => void
   onSkip?: () => void
+  /** The finished run, shown as a pill that jumps to the decision. */
+  result?: RunResult | null
+  runway?: string | null
+  onResult?: () => void
   focused?: boolean
   children: ReactNode
 }) {
@@ -80,11 +88,23 @@ function Shell({
       <header className="topbar">
         <div className="top-inner">
           <div className="brand">
-            <span className="brand-mark" aria-hidden="true">
-              ✈
+            <span className="brand-mark">
+              <PlaneIcon />
             </span>
             <span>Arrival desk</span>
           </div>
+          {result && (
+            <button
+              type="button"
+              className={`result-pill verdict-${result.status.toLowerCase()}`}
+              onClick={onResult}
+              aria-label={`${STATUS_TEXT[result.status].title}. Go to the decision.`}
+            >
+              <span className="result-dot" aria-hidden="true" />
+              <strong>{STATUS_TEXT[result.status].title}</strong>
+              {result.selected_plan && <span className="result-plan">{planHeadline(result.selected_plan.action, runway)}</span>}
+            </button>
+          )}
           <div className="top-actions">
             {onSkip && (
               <button className="trace-btn" type="button" onClick={onSkip}>
@@ -154,7 +174,7 @@ function Desk({ options, stepMs }: { options: Options; stepMs: number }) {
   const [prompts, setPrompts] = useState(() => loadPrompts(options.default_prompts))
   const [phase, setPhase] = useState<RunPhase>({ kind: 'idle' })
   const [following, setFollowing] = useState(false)
-  const traceRef = useRef<HTMLDivElement>(null)
+  const traceRef = useRef<HTMLDetailsElement>(null)
   const sections = useRef<Partial<Record<Stage, HTMLElement | null>>>({})
 
   useEffect(() => {
@@ -222,13 +242,27 @@ function Desk({ options, stepMs }: { options: Options; stepMs: number }) {
     }
   }
 
+  function showDecision() {
+    sections.current.decision?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   function showTrace() {
-    traceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    traceRef.current?.focus({ preventScroll: true })
+    const log = traceRef.current
+    if (!log) return
+    log.open = true
+    log.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    log.querySelector('summary')?.focus({ preventScroll: true })
   }
 
   return (
-    <Shell onTrace={showTrace} onSkip={replaying ? skip : undefined} focused={working}>
+    <Shell
+      onTrace={view ? showTrace : undefined}
+      onSkip={replaying ? skip : undefined}
+      result={replaying ? null : view?.result}
+      runway={view?.log.decision.commit?.runway_id}
+      onResult={showDecision}
+      focused={working}
+    >
       <section aria-labelledby="input-title">
         <article className="card input-card">
           <h1 id="input-title">Disruption scenario</h1>
@@ -262,14 +296,14 @@ function Desk({ options, stepMs }: { options: Options; stepMs: number }) {
                 The run could not start. {phase.message}
               </p>
             )}
-            <p className="note">Simulation with mock operational data. Not operational guidance.</p>
+            <p className="note">Simulated data. Not operational guidance.</p>
           </div>
         </article>
       </section>
 
       <StageSection
         stage="round1"
-        title="Round 1 - Independent proposals"
+        title="Round 1 - Proposals"
         active={live('round1')}
         sectionRef={sectionRef('round1')}
       >
@@ -283,7 +317,7 @@ function Desk({ options, stepMs }: { options: Options; stepMs: number }) {
 
       <StageSection
         stage="board"
-        title="Proposal board"
+        title="Hard checks"
         active={live('board')}
         sectionRef={sectionRef('board')}
       >
@@ -293,7 +327,7 @@ function Desk({ options, stepMs }: { options: Options; stepMs: number }) {
 
       <StageSection
         stage="round2"
-        title="Round 2 - Votes on feasible plans"
+        title="Round 2 - Votes"
         active={live('round2')}
         sectionRef={sectionRef('round2')}
       >
@@ -307,7 +341,7 @@ function Desk({ options, stepMs }: { options: Options; stepMs: number }) {
 
       <StageSection
         stage="decision"
-        title="Decision and commit"
+        title="Decision"
         active={live('decision')}
         sectionRef={sectionRef('decision')}
       >

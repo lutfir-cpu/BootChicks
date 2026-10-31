@@ -6,6 +6,7 @@ import {
   improvements,
   minutesAfter,
   MODE_NAMES,
+  planHeadline,
   ROLE_NAMES,
   STATUS_TEXT,
 } from '../labels'
@@ -20,63 +21,105 @@ export function DecisionCard({
 }: {
   run: RunView | null
   stale: boolean
-  traceRef: Ref<HTMLDivElement>
+  traceRef: Ref<HTMLDetailsElement>
 }) {
   const result = run?.result
   return (
-    <article className="card wide-card" aria-labelledby="decision-title">
-      <div className="agent-head">
-        <h3 id="decision-title">Decision</h3>
-        {result ? (
-          <span className={`badge badge-outcome-${result.status.toLowerCase()}`}>{STATUS_TEXT[result.status].title}</span>
-        ) : (
+    <article className="card wide-card" aria-label="Outcome">
+      {result && run ? (
+        <Verdict result={result} log={run.log} />
+      ) : (
+        <div className="agent-head">
+          <h3>Outcome</h3>
           <StatusBadge status={run ? 'running' : 'waiting'} />
-        )}
-      </div>
-      <LogPanel ref={traceRef} label="Run audit log" lines={run ? systemLog(run) : []} />
-      <div className="output">
+        </div>
+      )}
+      <div className="agent-body">
         {result && run ? (
           <Outcome result={result} log={run.log} stale={stale} />
         ) : run ? (
           <Loading>Waiting for the agents and checks...</Loading>
         ) : (
-          <p className="empty-value">Waiting.</p>
+          <p className="empty-value">Run a negotiation to see the chosen plan and every check behind it.</p>
         )}
       </div>
+      <LogPanel ref={traceRef} label="Run audit log" lines={run ? systemLog(run) : []} />
+      {result && (
+        <p className="audit">
+          Export: <a href={`/runs/${result.run_id}`}>result JSON</a> ·{' '}
+          <a href={`/runs/${result.run_id}/events?format=jsonl`}>events JSONL</a>
+          <span className="subtle mono"> run {result.run_id.slice(0, 8)}</span>
+        </p>
+      )}
     </article>
   )
 }
 
-function Outcome({ result, log, stale }: { result: RunResult; log: DecisionLog; stale: boolean }) {
+/** The decision at a glance: what happened, the plan, and what it gained over the baseline. */
+function Verdict({ result, log }: { result: RunResult; log: DecisionLog }) {
   const text = STATUS_TEXT[result.status]
+  const plan = result.selected_plan
+  const gains = result.improvement_metrics ? improvements(result.improvement_metrics) : []
+  const reason = log.decision.terminal?.reason_text
+  // A known reason replaces the generic opening, so the banner states why once.
+  const summary =
+    result.status === 'CONSENSUS' || !reason
+      ? text.summary
+      : plan
+        ? `${reason} Deterministic code chose a plan that passes every hard check; this is not agent consensus.`
+        : `${reason} Nothing was booked.`
+  return (
+    <div className={`verdict verdict-${result.status.toLowerCase()}`}>
+      <div className="verdict-top">
+        <h3 className="verdict-status">
+          {text.title}
+        </h3>
+        {plan && <span className="mono subtle">plan {plan.candidate_id.slice(0, 8)}</span>}
+      </div>
+      {plan ? (
+        <p className="verdict-plan">{planHeadline(plan.action, log.decision.commit?.runway_id)}</p>
+      ) : (
+        <p className="verdict-plan no-plan">
+          {result.status === 'ESCALATED' ? 'A human must decide.' : 'No decision was reached.'}
+        </p>
+      )}
+      <p className="verdict-summary" aria-live="polite">
+        {summary}
+      </p>
+      {gains.length > 0 && (
+        <ul className="verdict-gains" aria-label="Versus the baseline plan">
+          <li className="gain-intro">Versus baseline</li>
+          {gains.map((gain) => (
+            <li key={gain.label} className={`gain-${gain.tone}`}>
+              <strong>{gain.text}</strong> {gain.label.toLowerCase()}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function Outcome({ result, log, stale }: { result: RunResult; log: DecisionLog; stale: boolean }) {
+  const stats = [
+    MODE_NAMES[result.mode],
+    `${result.rounds_used} ${result.rounds_used === 1 ? 'round' : 'rounds'}`,
+    `${result.logical_agent_responses} agent responses`,
+    `${result.provider_requests} model requests`,
+    `${formatNumber(result.latency_ms / 1000, 2)} s`,
+  ]
   return (
     <>
-      <h4 className="panel-title">Outcome</h4>
-      <p className="outcome-summary" aria-live="polite">
-        {text.summary}
-        {result.status !== 'CONSENSUS' && log.decision.terminal && ` ${log.decision.terminal.reason_text}`}
-      </p>
+      <p className="run-stats">{stats.join(' · ')}</p>
       {stale && (
         <p className="stale" role="status">
           Inputs changed since this run. Run again to see their effect.
         </p>
       )}
-      <div className="final-grid">
-        <DataLine label="Agents" value={MODE_NAMES[result.mode]} />
-        <DataLine label="Rounds" value={String(result.rounds_used)} />
-        <DataLine label="Agent responses" value={String(result.logical_agent_responses)} />
-        <DataLine label="Model requests" value={String(result.provider_requests)} />
-        <DataLine label="Time" value={`${formatNumber(result.latency_ms / 1000, 2)} s`} />
-      </div>
       <ChosenPlan result={result} log={log} />
       <h4 className="subheading">How it was decided</h4>
       <Explanation log={log} />
       {result.evaluation && <Checks checks={result.evaluation.checks} />}
-      <p className="audit">
-        Audit trail: <a href={`/runs/${result.run_id}`}>result JSON</a> ·{' '}
-        <a href={`/runs/${result.run_id}/events?format=jsonl`}>events JSONL</a>
-        <span className="subtle mono"> run {result.run_id.slice(0, 8)}</span>
-      </p>
     </>
   )
 }
@@ -86,12 +129,10 @@ function ChosenPlan({ result, log }: { result: RunResult; log: DecisionLog }) {
   const o = result.evaluation?.outcomes
   if (!plan || !o) return null
   const a = plan.action
-  const gains = result.improvement_metrics ? improvements(result.improvement_metrics) : []
   return (
     <>
       <h4 className="subheading">
-        {a.action === 'DIVERT' ? `Diversion to ${a.airport}` : 'Landing plan'}
-        <span className="mono subtle"> {plan.candidate_id.slice(0, 8)}</span>
+        {a.action === 'DIVERT' ? `Diversion to ${a.airport}` : 'Landing plan'} details
       </h4>
       <div className="final-grid">
         <DataLine label="Airport" value={a.airport} />
@@ -109,16 +150,6 @@ function ChosenPlan({ result, log }: { result: RunResult; log: DecisionLog }) {
         <DataLine label="Crew overtime" value={`${formatNumber(o.overtime_min)} min`} />
         <DataLine label="Missed connections" value={`${formatNumber(o.missed_connections)} pax`} />
       </div>
-      {gains.length > 0 && (
-        <>
-          <h4 className="subheading">Compared with the baseline plan</h4>
-          <div className="final-grid">
-            {gains.map((gain) => (
-              <DataLine key={gain.label} label={gain.label} value={gain.text} tone={gain.tone} />
-            ))}
-          </div>
-        </>
-      )}
     </>
   )
 }
