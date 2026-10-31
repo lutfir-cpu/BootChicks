@@ -32,7 +32,9 @@ For a single-process setup, run `npm run build` and `bootchicks serve` serves `f
 Backwards and overlapping periods are flagged next to the row and block the run; the backend checks again.
 - **Agent system prompts**: edit the ATC, Pilot and Ground prompts, or reset each to its default.
 Edits are saved in this browser's local storage and sent only for Claude runs; only edited roles are sent.
-- **Results**: outcome, chosen plan and its comparison with the baseline, round 1 proposals, the checked proposal board, round 2 votes with rationales, the decision and commit, every hard check of the chosen plan, and links to the audit trail.
+- **Results**: one card per agent per round, then the proposal board and the decision, laid out in the AeroResolve design from PR #6.
+Each agent card shows the constraints it was given, its proposals or votes with rationales, and a live log.
+The data comes from `GET /runs/{id}/decisions`, which the app polls while the run is in progress.
 
 Each run uses a new `environment`, so previous commits never block it.
 Changing any input after a run marks the result as stale until it is run again.

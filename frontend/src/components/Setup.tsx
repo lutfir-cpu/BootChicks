@@ -1,91 +1,9 @@
 import { useId, useState } from 'react'
 import { busyPeriodErrors, type BusyPeriod } from '../busyPeriods'
-import { ROLE_FOCUS, ROLE_NAMES } from '../labels'
-import { ROLES, type Mode, type Options, type Role, type ScenarioOption } from '../types'
+import { formatNumber, ROLE_NAMES } from '../labels'
+import { ROLES, type Mode, type Options, type Role, type ScenarioAirport, type ScenarioOption } from '../types'
 
 export type FlightSource = 'synthetic' | 'sample'
-
-export function ScenarioPicker({
-  scenarios,
-  value,
-  onChange,
-}: {
-  scenarios: ScenarioOption[]
-  value: string
-  onChange: (id: string) => void
-}) {
-  return (
-    <fieldset className="section">
-      <legend className="section-title">Scenario</legend>
-      <div className="choice-list">
-        {scenarios.map((scenario) => (
-          <label key={scenario.id} className="choice">
-            <input
-              type="radio"
-              name="scenario"
-              value={scenario.id}
-              checked={value === scenario.id}
-              onChange={() => onChange(scenario.id)}
-            />
-            <span>
-              <span className="choice-label">{scenario.label}</span>
-              <span className="choice-hint">{scenario.description}</span>
-            </span>
-          </label>
-        ))}
-      </div>
-    </fieldset>
-  )
-}
-
-export function FlightSourcePicker({
-  options,
-  value,
-  onChange,
-}: {
-  options: Options
-  value: FlightSource
-  onChange: (source: FlightSource) => void
-}) {
-  const row = options.sample_trigger.flight_row
-  const date = `${row.YEAR}-${String(row.MONTH).padStart(2, '0')}-${String(row.DAY).padStart(2, '0')}`
-  return (
-    <fieldset className="section">
-      <legend className="section-title">Flight</legend>
-      <div className="choice-list">
-        <label className="choice">
-          <input
-            type="radio"
-            name="source"
-            checked={value === 'synthetic'}
-            onChange={() => onChange('synthetic')}
-          />
-          <span>
-            <span className="choice-label">Synthetic demo flight</span>
-            <span className="choice-hint">Fixture arrival into DFW.</span>
-          </span>
-        </label>
-        <label className="choice">
-          <input
-            type="radio"
-            name="source"
-            checked={value === 'sample'}
-            onChange={() => onChange('sample')}
-          />
-          <span>
-            <span className="choice-label">
-              {row.AIRLINE} {row.FLIGHT_NUMBER}, {row.ORIGIN_AIRPORT} to {row.DESTINATION_AIRPORT}
-            </span>
-            <span className="choice-hint">
-              Real US DOT record from {date} (CSV line {options.sample_trigger.provenance.csv_line}). Only
-              the trigger and delay are real; airport resources stay synthetic.
-            </span>
-          </span>
-        </label>
-      </div>
-    </fieldset>
-  )
-}
 
 const MODES: { mode: Mode; label: string; hint: string }[] = [
   { mode: 'stub', label: 'Fixture agents', hint: 'Deterministic scripted roles. No API calls.' },
@@ -93,47 +11,172 @@ const MODES: { mode: Mode; label: string; hint: string }[] = [
   { mode: 'fallback', label: 'No agents', hint: 'Skip negotiation; deterministic planner only.' },
 ]
 
-export function ModePicker({
+export function ScenarioControls({
   options,
-  value,
-  onChange,
+  scenarioId,
+  source,
+  mode,
+  onScenario,
+  onSource,
+  onMode,
 }: {
   options: Options
-  value: Mode
-  onChange: (mode: Mode) => void
+  scenarioId: string
+  source: FlightSource
+  mode: Mode
+  onScenario: (id: string) => void
+  onSource: (source: FlightSource) => void
+  onMode: (mode: Mode) => void
 }) {
+  const scenario = options.scenarios.find((s) => s.id === scenarioId)
+  const row = options.sample_trigger.flight_row
   return (
-    <fieldset className="section">
-      <legend className="section-title">Agents</legend>
-      <div className="segmented" role="radiogroup" aria-label="Agents">
-        {MODES.map(({ mode, label }) => {
-          const disabled = mode === 'live' && !options.live_available
-          return (
-            <label key={mode} className={disabled ? 'segment disabled' : 'segment'}>
-              <input
-                type="radio"
-                name="mode"
-                value={mode}
-                checked={value === mode}
-                disabled={disabled}
-                onChange={() => onChange(mode)}
-              />
-              <span>{label}</span>
-            </label>
-          )
-        })}
+    <div className="input-column">
+      <h2>Scenario controls</h2>
+      <div className="field">
+        <label htmlFor="scenario">Scenario</label>
+        <select id="scenario" value={scenarioId} onChange={(e) => onScenario(e.target.value)}>
+          {options.scenarios.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+        <p className="field-hint">{scenario?.description}</p>
       </div>
-      <p className="hint">
-        {MODES.find((m) => m.mode === value)?.hint}
-        {value === 'live' && ` Model: ${options.model}.`}
-      </p>
-      {!options.live_available && (
-        <p className="hint">
-          Claude agents need <code>ANTHROPIC_API_KEY</code> in the repository's <code>.env</code>; restart the
-          server after setting it.
+      <div className="field">
+        <label htmlFor="flight">Flight</label>
+        <select id="flight" value={source} onChange={(e) => onSource(e.target.value as FlightSource)}>
+          <option value="synthetic">Synthetic demo flight</option>
+          <option value="sample">
+            {row.AIRLINE} {row.FLIGHT_NUMBER}, {row.ORIGIN_AIRPORT} to {row.DESTINATION_AIRPORT}
+          </option>
+        </select>
+      </div>
+      <div className="field">
+        <label htmlFor="mode">Agents</label>
+        <select id="mode" value={mode} onChange={(e) => onMode(e.target.value as Mode)}>
+          {MODES.map((m) => (
+            <option key={m.mode} value={m.mode} disabled={m.mode === 'live' && !options.live_available}>
+              {m.label}
+              {m.mode === 'live' && !options.live_available ? ' (needs an API key)' : ''}
+            </option>
+          ))}
+        </select>
+        <p className="field-hint">
+          {MODES.find((m) => m.mode === mode)?.hint}
+          {mode === 'live' && ` Model: ${options.model}.`}
         </p>
-      )}
-    </fieldset>
+        {!options.live_available && (
+          <p className="field-hint">
+            Set <code>ANTHROPIC_API_KEY</code> in <code>.env</code> to enable Claude agents.
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Fields({ fields }: { fields: [label: string, value: string][] }) {
+  return (
+    <dl className="input-fields">
+      {fields.map(([label, value]) => (
+        <div className="field" key={label}>
+          <dt className="field-label">{label}</dt>
+          <dd className="field-value">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+/** HHMM as stored in the DOT data, e.g. 1228 to "12:28". */
+function hhmm(value: number): string {
+  const text = String(value).padStart(4, '0')
+  return `${text.slice(0, 2)}:${text.slice(2)}`
+}
+
+export function FlightRecord({ options, source }: { options: Options; source: FlightSource }) {
+  const trigger = options.sample_trigger
+  const row = trigger.flight_row
+  if (source === 'synthetic') {
+    return (
+      <div className="input-column">
+        <h2>Flight record</h2>
+        <div className="source-row">
+          <span className="source-badge sim-badge">Synthetic fixture</span>
+        </div>
+        <Fields
+          fields={[
+            ['Flight', 'SYNTHETIC-DEMO'],
+            ['Destination', 'DFW'],
+          ]}
+        />
+      </div>
+    )
+  }
+  const date = `${row.YEAR}-${String(row.MONTH).padStart(2, '0')}-${String(row.DAY).padStart(2, '0')}`
+  return (
+    <div className="input-column">
+      <h2>Flight record</h2>
+      <div className="source-row">
+        <span className="source-badge">US DOT dataset</span>
+        <span className="source-badge">CSV line {trigger.provenance.csv_line}</span>
+      </div>
+      <Fields
+        fields={[
+          ['Flight', `${row.AIRLINE} ${row.FLIGHT_NUMBER}`],
+          ['Airline', trigger.airline_row.AIRLINE],
+          ['Route', `${row.ORIGIN_AIRPORT} to ${row.DESTINATION_AIRPORT}`],
+          ['Date', date],
+          ['Scheduled arrival', hhmm(row.SCHEDULED_ARRIVAL)],
+          ['Arrival delay', row.ARRIVAL_DELAY === null ? 'Not recorded' : `${formatNumber(row.ARRIVAL_DELAY)} min`],
+        ]}
+      />
+    </div>
+  )
+}
+
+function runwayText(airport: ScenarioAirport, windowMin: number): string {
+  return airport.runways
+    .map((runway) => {
+      if (runway.closed.length === 0) return `${runway.id} open`
+      if (runway.closed.some((w) => w.start_min <= 0 && w.end_min >= windowMin)) return `${runway.id} closed`
+      const windows = runway.closed.map((w) =>
+        w.start_min <= 0 ? `until +${w.end_min} min` : `+${w.start_min} to +${w.end_min} min`,
+      )
+      return `${runway.id} closed ${windows.join(', ')}`
+    })
+    .join(' · ')
+}
+
+export function AirportState({ scenario }: { scenario: ScenarioOption }) {
+  const a = scenario.aircraft
+  const destination = scenario.airports.find((airport) => airport.kind === 'destination')!
+  const alternate = scenario.airports.find((airport) => airport.kind === 'alternate')
+  return (
+    <div className="input-column">
+      <h2>Simulated airport state</h2>
+      <div className="source-row">
+        <span className="source-badge sim-badge">Simulated inputs</span>
+        <span className="source-badge sim-badge">Mock profiles</span>
+      </div>
+      <Fields
+        fields={[
+          ['Aircraft', a.type_label],
+          [
+            'Fuel on board',
+            `${formatNumber(a.fuel_kg)} kg (landing floor ${formatNumber(a.protected_landing_kg)} kg)`,
+          ],
+          [`${destination.iata_code} runways`, runwayText(destination, scenario.window_min)],
+          ...(alternate
+            ? [[`${alternate.iata_code} runways (alternate)`, runwayText(alternate, scenario.window_min)] as [string, string]]
+            : []),
+          [`${destination.iata_code} gates`, `${destination.gates.join(', ')} (assigned ${scenario.preferred_gate})`],
+          [`${destination.iata_code} crews`, String(destination.crews)],
+        ]}
+      />
+    </div>
   )
 }
 
@@ -164,12 +207,9 @@ export function BusyPeriodsEditor({
     ])
   }
   return (
-    <fieldset className="section">
+    <fieldset className="input-column">
       <legend className="section-title">Gate busy periods</legend>
-      <p className="hint">
-        Block a gate for other traffic, in minutes after the scenario starts. A period ending at 30 frees the gate
-        at minute 30.
-      </p>
+      <p className="field-hint">Minutes after the scenario starts.</p>
       {rows.length > 0 && (
         <div className="busy-table" role="table" aria-label="Gate busy periods">
           <div className="busy-row busy-head" role="row">
@@ -273,12 +313,10 @@ function MinuteInput({
 export function PromptEditor({
   defaults,
   prompts,
-  mode,
   onChange,
 }: {
   defaults: Record<Role, string>
   prompts: Record<Role, string>
-  mode: Mode
   onChange: (prompts: Record<Role, string>) => void
 }) {
   const [active, setActive] = useState<Role>('ATC')
@@ -286,18 +324,13 @@ export function PromptEditor({
   const edited = ROLES.filter((role) => prompts[role] !== defaults[role])
   const blank = !prompts[active].trim()
   return (
-    <details className="section prompts">
+    <details className="input-column prompts">
       <summary className="section-title">
         Agent system prompts
         {edited.length > 0 && (
-          <span className="badge">{edited.length} edited</span>
+          <span className="count-badge">{edited.length} edited</span>
         )}
       </summary>
-      <p className="hint">
-        {mode === 'live'
-          ? 'Each Claude role receives its own system prompt. Python still enforces every hard check.'
-          : 'Used only by Claude agents; the current agent mode ignores them.'}
-      </p>
       <div className="tabs" role="tablist" aria-label="Agent role">
         {ROLES.map((role) => (
           <button
@@ -316,7 +349,6 @@ export function PromptEditor({
         ))}
       </div>
       <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${active}`}>
-        <p className="hint">{ROLE_FOCUS[active]}</p>
         <textarea
           aria-label={`${ROLE_NAMES[active]} system prompt`}
           aria-invalid={blank}
@@ -331,7 +363,7 @@ export function PromptEditor({
           </p>
         )}
         <div className="prompt-actions">
-          <span className="hint">
+          <span className="field-hint">
             {prompts[active] === defaults[active] ? 'Default prompt' : 'Edited, saved in this browser'}
           </span>
           <button

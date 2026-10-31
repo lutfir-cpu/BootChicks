@@ -1,25 +1,30 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { ApiError, fetchEvents, fetchOptions, startRun, waitForRun } from './api'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { fetchOptions, followRun, startRun } from './api'
 import { busyPeriodErrors, toOccupancies, type BusyPeriod } from './busyPeriods'
-import { AuditLinks, Checks, Outcome, PlanSummary, Timeline } from './components/Results'
+import { AgentCard } from './components/Agents'
+import { ProposalBoard } from './components/Board'
+import { DecisionCard } from './components/Decision'
+import { BranchConnector, MergeConnector } from './components/Layout'
 import {
+  AirportState,
   BusyPeriodsEditor,
-  FlightSourcePicker,
-  ModePicker,
+  FlightRecord,
   PromptEditor,
-  ScenarioPicker,
+  ScenarioControls,
   type FlightSource,
 } from './components/Setup'
-import { readNegotiation } from './negotiation'
-import { ROLES, type AuditEvent, type Mode, type Options, type Role, type RunRequest, type RunResult } from './types'
+import { STATUS_TEXT } from './labels'
+import type { RunView } from './trace'
+import { ROLES, type DecisionLog, type Mode, type Options, type Role, type RunRequest, type RunResult } from './types'
 
 const PROMPT_STORAGE_KEY = 'bootchicks.rolePrompts'
+const LIVE_BUDGET = { round_timeout_seconds: 60, total_timeout_seconds: 150 }
 
 type RunPhase =
   | { kind: 'idle' }
-  | { kind: 'running' }
+  | { kind: 'running'; log: DecisionLog | null }
   | { kind: 'error'; message: string }
-  | { kind: 'done'; result: RunResult; events: AuditEvent[]; fingerprint: string }
+  | { kind: 'done'; result: RunResult; log: DecisionLog; fingerprint: string }
 
 export default function App() {
   const [options, setOptions] = useState<Options | null>(null)
@@ -32,8 +37,8 @@ export default function App() {
   if (loadError) {
     return (
       <Shell>
-        <div className="load-error" role="alert">
-          <h2>Cannot load the simulator</h2>
+        <div className="card notice" role="alert">
+          <h1>Cannot load the simulator</h1>
           <p>{loadError}</p>
         </div>
       </Shell>
@@ -42,28 +47,33 @@ export default function App() {
   if (!options) {
     return (
       <Shell>
-        <p className="loading">Loading scenarios...</p>
+        <p className="page-loading">Loading scenarios...</p>
       </Shell>
     )
   }
-  return (
-    <Shell>
-      <Desk options={options} />
-    </Shell>
-  )
+  return <Desk options={options} />
 }
 
-function Shell({ children }: { children: ReactNode }) {
+function Shell({ status, onTrace, children }: { status?: ReactNode; onTrace?: () => void; children: ReactNode }) {
   return (
-    <div className="app">
-      <header className="masthead">
-        <div>
-          <h1>Arrival desk</h1>
-          <p className="tagline">Three perspectives. One checkable arrival plan.</p>
+    <div className="app-shell">
+      <header className="topbar">
+        <div className="top-inner">
+          <div className="brand">
+            <span className="brand-mark" aria-hidden="true">
+              ✈
+            </span>
+            <span>Arrival desk</span>
+          </div>
+          {status}
+          {onTrace && (
+            <button className="trace-btn" type="button" onClick={onTrace}>
+              View audit log
+            </button>
+          )}
         </div>
-        <p className="disclaimer">Simulation with mock operational data. Not operational guidance.</p>
       </header>
-      {children}
+      <main className="workflow">{children}</main>
     </div>
   )
 }
@@ -86,10 +96,13 @@ function Desk({ options }: { options: Options }) {
   const [busy, setBusy] = useState<BusyPeriod[]>([])
   const [prompts, setPrompts] = useState(() => loadPrompts(options.default_prompts))
   const [phase, setPhase] = useState<RunPhase>({ kind: 'idle' })
+  const traceRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     // Keep only edited prompts, so changed defaults reach users who never edited them.
-    const edited = Object.fromEntries(ROLES.filter((r) => prompts[r] !== options.default_prompts[r]).map((r) => [r, prompts[r]]))
+    const edited = Object.fromEntries(
+      ROLES.filter((r) => prompts[r] !== options.default_prompts[r]).map((r) => [r, prompts[r]]),
+    )
     localStorage.setItem(PROMPT_STORAGE_KEY, JSON.stringify(edited))
   }, [prompts, options.default_prompts])
 
@@ -106,109 +119,156 @@ function Desk({ options }: { options: Options }) {
       scenario_id: scenarioId,
       mode,
       gate_occupancies: toOccupancies(busy),
-      // Only live runs use prompts.
-      role_prompts: mode === 'live' ? editedPrompts : {},
+      // Only live runs use prompts. One Claude round takes over 12 s, the backend's default round budget.
+      ...(mode === 'live'
+        ? { role_prompts: editedPrompts, ...LIVE_BUDGET }
+        : { role_prompts: {} }),
       ...(source === 'sample' ? { trigger: { ...options.sample_trigger, scenario_id: scenarioId } } : {}),
     }
   }, [scenarioId, mode, busy, prompts, source, options])
   const fingerprint = JSON.stringify(request)
 
   async function run() {
-    setPhase({ kind: 'running' })
+    setPhase({ kind: 'running', log: null })
     try {
       const id = crypto.randomUUID()
       // A fresh environment per run, so earlier commits never block a new attempt.
       const { run_id } = await startRun({ ...request, environment: `ui-${id.slice(0, 12)}` }, id)
-      const state = await waitForRun(run_id)
-      const events = await fetchEvents(run_id)
-      if (!state.result) throw new ApiError('The run finished without a result.')
-      setPhase({ kind: 'done', result: state.result, events, fingerprint })
+      const { result, log } = await followRun(run_id, (log) => setPhase({ kind: 'running', log }))
+      setPhase({ kind: 'done', result, log, fingerprint })
     } catch (error) {
       setPhase({ kind: 'error', message: error instanceof Error ? error.message : String(error) })
     }
   }
 
+  function loadDemo() {
+    setScenarioId(options.scenarios[0].id)
+    setSource('synthetic')
+    setMode('stub')
+    setBusy([])
+  }
+
+  function showTrace() {
+    traceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    traceRef.current?.focus({ preventScroll: true })
+  }
+
+  const runView: RunView | null =
+    phase.kind === 'done'
+      ? { log: phase.log, result: phase.result }
+      : phase.kind === 'running' && phase.log
+        ? { log: phase.log, result: null }
+        : null
+
+  const row = options.sample_trigger.flight_row
+  const flight = source === 'sample' ? `${row.AIRLINE} ${row.FLIGHT_NUMBER}` : 'Demo flight'
+  const [statusText, statusTone] =
+    phase.kind === 'running'
+      ? ['Negotiating', 'running']
+      : phase.kind === 'done'
+        ? [STATUS_TEXT[phase.result.status].title, phase.result.status.toLowerCase()]
+        : phase.kind === 'error'
+          ? ['Could not start', 'failed']
+          : ['Ready', 'idle']
+  const status = (
+    <span className={`scenario-status status-${statusTone}`} aria-live="polite">
+      {flight} · {scenario.airports[0].iata_code} · {statusText}
+    </span>
+  )
+
   return (
-    <main className="desk">
-      <aside className="setup" aria-label="Run setup">
-        <ScenarioPicker scenarios={options.scenarios} value={scenarioId} onChange={setScenarioId} />
-        <FlightSourcePicker options={options} value={source} onChange={setSource} />
-        <ModePicker options={options} value={mode} onChange={setMode} />
-        <BusyPeriodsEditor scenario={scenario} rows={busy} onChange={setBusy} />
-        <PromptEditor defaults={options.default_prompts} prompts={prompts} mode={mode} onChange={setPrompts} />
-        <div className="run-bar">
-          <button type="button" className="primary-button" disabled={!canRun} onClick={run}>
-            {phase.kind === 'running' ? 'Negotiating...' : 'Run negotiation'}
-          </button>
-          {!busyValid && <p className="field-error">Fix the gate busy periods first.</p>}
-          {busyValid && mode === 'live' && !promptsValid && (
-            <p className="field-error">Every agent needs a system prompt.</p>
-          )}
-        </div>
-      </aside>
-      <section className="results" aria-label="Results" aria-busy={phase.kind === 'running'}>
-        <ResultArea phase={phase} fingerprint={fingerprint} mode={mode} />
+    <Shell status={status} onTrace={showTrace}>
+      <section aria-labelledby="input-title">
+        <article className="card input-card">
+          <div className="input-heading">
+            <div>
+              <p className="kicker">Input</p>
+              <h1 id="input-title">Disruption scenario</h1>
+            </div>
+            <button className="demo-btn" type="button" onClick={loadDemo}>
+              Demo
+            </button>
+          </div>
+          <div className="input-columns">
+            <ScenarioControls
+              options={options}
+              scenarioId={scenarioId}
+              source={source}
+              mode={mode}
+              onScenario={setScenarioId}
+              onSource={setSource}
+              onMode={setMode}
+            />
+            <FlightRecord options={options} source={source} />
+            <AirportState scenario={scenario} />
+          </div>
+          <div className="input-columns two">
+            <BusyPeriodsEditor scenario={scenario} rows={busy} onChange={setBusy} />
+            <PromptEditor defaults={options.default_prompts} prompts={prompts} onChange={setPrompts} />
+          </div>
+          <div className="input-footer">
+            <div className="run-bar">
+              <button type="button" className="primary-btn" disabled={!canRun} onClick={run}>
+                {phase.kind === 'running' ? 'Negotiating...' : 'Run negotiation'}
+              </button>
+              {!busyValid && <p className="field-error">Fix the gate busy periods first.</p>}
+              {busyValid && mode === 'live' && !promptsValid && (
+                <p className="field-error">Every agent needs a system prompt.</p>
+              )}
+              {phase.kind === 'error' && (
+                <p className="field-error" role="alert">
+                  The run could not start. {phase.message}
+                </p>
+              )}
+            </div>
+            <p className="note">Simulation with mock operational data. Not operational guidance.</p>
+          </div>
+        </article>
       </section>
-    </main>
-  )
-}
 
-function ResultArea({ phase, fingerprint, mode }: { phase: RunPhase; fingerprint: string; mode: Mode }) {
-  if (phase.kind === 'running') {
-    return (
-      <div className="placeholder" role="status">
-        <h2>Negotiating</h2>
-        <p>
-          {mode === 'live'
-            ? 'Waiting for three independent Claude agents. This takes up to 30 seconds.'
-            : 'Running the agents and checks.'}
-        </p>
-      </div>
-    )
-  }
-  if (phase.kind === 'error') {
-    return (
-      <div className="placeholder error" role="alert">
-        <h2>The run could not start</h2>
-        <p>{phase.message}</p>
-      </div>
-    )
-  }
-  if (phase.kind === 'idle') return <HowItWorks />
-  const view = readNegotiation(phase.events)
-  return (
-    <>
-      <Outcome result={phase.result} stale={phase.fingerprint !== fingerprint} />
-      <PlanSummary result={phase.result} view={view} />
-      <Timeline result={phase.result} view={view} />
-      {phase.result.evaluation && <Checks checks={phase.result.evaluation.checks} />}
-      <AuditLinks runId={phase.result.run_id} />
-    </>
-  )
-}
+      <section aria-labelledby="round-one-title" aria-busy={phase.kind === 'running'}>
+        <h2 className="turn-title" id="round-one-title">
+          Round 1 - Independent proposals
+        </h2>
+        <BranchConnector />
+        <div className="agent-grid">
+          {ROLES.map((role) => (
+            <AgentCard key={role} role={role} round={1} run={runView} />
+          ))}
+        </div>
+      </section>
 
-function HowItWorks() {
-  return (
-    <div className="placeholder">
-      <h2>How a run works</h2>
-      <ol className="how">
-        <li>
-          <strong>Round 1.</strong> ATC, Pilot and Ground each propose up to three complete landing plans.
-        </li>
-        <li>
-          <strong>Python checks.</strong> Every proposal is tested against hard rules: fuel floors, separation,
-          runway and taxi conflicts, gates, crews and airport capacity. Agents cannot override a failed check.
-        </li>
-        <li>
-          <strong>Round 2.</strong> Each role votes on every feasible plan. A plan wins only if all three accept the
-          same exact version.
-        </li>
-        <li>
-          <strong>Commit.</strong> The winner is revalidated and its resources booked. Without agreement, a
-          deterministic fallback picks a valid plan or escalates to a human.
-        </li>
-      </ol>
-      <p className="hint">Choose a scenario and run the negotiation.</p>
-    </div>
+      <section aria-labelledby="board-heading">
+        <h2 className="turn-title" id="board-heading">
+          Python checks - Proposal board
+        </h2>
+        <MergeConnector />
+        <ProposalBoard run={runView} />
+      </section>
+
+      <section aria-labelledby="round-two-title">
+        <h2 className="turn-title" id="round-two-title">
+          Round 2 - Votes on feasible plans
+        </h2>
+        <BranchConnector />
+        <div className="agent-grid">
+          {ROLES.map((role) => (
+            <AgentCard key={role} role={role} round={2} run={runView} />
+          ))}
+        </div>
+      </section>
+
+      <section aria-labelledby="decision-heading">
+        <h2 className="turn-title" id="decision-heading">
+          Decision and commit
+        </h2>
+        <MergeConnector />
+        <DecisionCard
+          run={runView}
+          stale={phase.kind === 'done' && phase.fingerprint !== fingerprint}
+          traceRef={traceRef}
+        />
+      </section>
+    </Shell>
   )
 }

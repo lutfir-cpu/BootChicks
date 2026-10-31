@@ -1,15 +1,9 @@
-import type { Role, RunStatus } from './types'
+import type { PlannedAction, Role, RunStatus } from './types'
 
 export const ROLE_NAMES: Record<Role, string> = {
   ATC: 'ATC',
   PILOT: 'Pilot',
   GROUND: 'Ground',
-}
-
-export const ROLE_FOCUS: Record<Role, string> = {
-  ATC: 'Runways, separation, taxi routes and capacity',
-  PILOT: 'Fuel floors, aircraft limits and connections',
-  GROUND: 'Gates, crews, bookings and overtime',
 }
 
 export const STATUS_TEXT: Record<RunStatus, { title: string; summary: string }> = {
@@ -31,27 +25,6 @@ export const STATUS_TEXT: Record<RunStatus, { title: string; summary: string }> 
   },
 }
 
-const REASONS: Record<string, string> = {
-  UNANIMOUS_VALIDATED_COMMIT: 'Unanimous vote, revalidated and committed.',
-  DETERMINISTIC_ONLY: 'Agents were skipped; the deterministic planner chose directly.',
-  ROUND_1_FAILURE: 'An agent did not return a valid round 1 proposal in time.',
-  ROUND_2_FAILURE: 'An agent did not return a valid round 2 vote in time.',
-  NO_FEASIBLE_PROPOSALS: 'None of the proposed plans passed every hard check.',
-  NO_UNANIMOUS_PLAN: 'No feasible plan was accepted by all three roles.',
-  NO_VALIDATED_PLAN: 'Neither the destination nor the alternate has a plan that passes every hard check.',
-  TOTAL_DEADLINE_EXCEEDED: 'The run used up its total time budget.',
-  PROVIDER_OR_PROTOCOL_ERROR: 'An agent call failed or broke the message protocol.',
-  STALE_SNAPSHOT_OR_COMMIT_REVALIDATION_FAILED: 'Airport state changed before commit, so the agreed plan was revalidated and dropped.',
-  FALLBACK_COMMIT_FAILED: 'The fallback plan could not be committed.',
-  FALLBACK_ERROR: 'The fallback planner hit an error.',
-  WORKER_STOPPED: 'The server stopped while this run was in progress.',
-}
-
-export function reasonText(code: string | null | undefined): string {
-  if (!code) return ''
-  return REASONS[code] ?? code.toLowerCase().replaceAll('_', ' ')
-}
-
 export const MODE_NAMES: Record<string, string> = {
   stub: 'Fixture agents',
   live: 'Claude agents',
@@ -62,6 +35,11 @@ export const MODE_NAMES: Record<string, string> = {
 /** Clock time in UTC, e.g. "06:25". Scenario times are synthetic, so the date is omitted. */
 export function clockTime(iso: string): string {
   return new Date(iso).toISOString().slice(11, 16)
+}
+
+/** A plan in one line, e.g. "06:25 · R1 · gate B2". */
+export function actionText(action: PlannedAction): string {
+  return `${clockTime(action.landing_slot)} · ${action.runway_id ?? action.airport} · gate ${action.gate_id}`
 }
 
 /** Minutes after the scenario clock, e.g. "+25 min". */

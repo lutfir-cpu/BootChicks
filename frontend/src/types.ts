@@ -5,9 +5,18 @@ export const ROLES: readonly Role[] = ['ATC', 'PILOT', 'GROUND']
 
 export type Mode = 'stub' | 'live' | 'fallback'
 
-interface ScenarioAirport {
+/** A window in minutes after the scenario clock. */
+export interface MinuteWindow {
+  start_min: number
+  end_min: number
+}
+
+export interface ScenarioAirport {
   iata_code: string
+  kind: 'destination' | 'alternate'
   gates: string[]
+  runways: { id: string; closed: MinuteWindow[] }[]
+  crews: number
 }
 
 export interface ScenarioOption {
@@ -15,6 +24,8 @@ export interface ScenarioOption {
   label: string
   description: string
   preferred_gate: string
+  window_min: number
+  aircraft: { type_label: string; fuel_kg: number; protected_landing_kg: number }
   airports: ScenarioAirport[]
 }
 
@@ -23,12 +34,16 @@ interface WorkflowInput {
   flight_row: Record<string, unknown> & {
     AIRLINE: string
     FLIGHT_NUMBER: string | number
+    TAIL_NUMBER: string | null
     ORIGIN_AIRPORT: string
     DESTINATION_AIRPORT: string
     YEAR: number
     MONTH: number
     DAY: number
+    SCHEDULED_ARRIVAL: number
+    ARRIVAL_DELAY: number | null
   }
+  airline_row: { AIRLINE: string }
   provenance: { csv_line: number | null }
   [key: string]: unknown
 }
@@ -54,6 +69,8 @@ export interface RunRequest {
   environment: string
   gate_occupancies: GateOccupancy[]
   role_prompts: Partial<Record<Role, string>>
+  round_timeout_seconds?: number
+  total_timeout_seconds?: number
   trigger?: WorkflowInput
 }
 
@@ -127,28 +144,92 @@ export interface RunState {
   result: RunResult | null
 }
 
-export interface AuditEvent {
-  sequence: number
-  kind: string
-  payload: Record<string, unknown>
+export interface Given {
+  label: string
+  value: string
+}
+
+/** A plan action with the runway its taxi path starts from. */
+export interface PlannedAction extends Action {
+  runway_id: string | null
 }
 
 export interface Proposal {
   label: 'preferred' | 'compromise' | 'concession'
-  action: Action
+  action: PlannedAction
   rationale: string
+  requested_concessions: string[]
 }
 
 export interface Vote {
   candidate_id: string
   plan_hash: string
+  action: PlannedAction | null
   decision: 'ACCEPT' | 'REJECT'
   preference_rank: number
+  reason_codes: string[]
   rationale: string
   accepted_concessions: string[]
 }
 
-export interface TaxiPath {
-  id: string
-  runway_id: string
+export interface AgentDecision {
+  status: 'DECIDING' | 'DECIDED' | 'NO_REPLY'
+  received_at: string
+  decided_at: string | null
+  given: Given[]
+  custom_prompt: boolean
+  provider: string | null
+  model: string | null
+  prompt_version: string
+  proposals: Proposal[]
+  votes: Vote[]
+  absent_reason: string | null
+}
+
+export interface BoardCandidate {
+  candidate_id: string
+  plan_hash: string
+  action: PlannedAction
+  proposers: Role[]
+  feasible: boolean
+  checks: Pick<CheckResult, 'constraint_id' | 'domain' | 'passed'>[]
+}
+
+export interface TimelineEntry {
+  sequence: number
+  at: string
+  actor: Role | 'SYSTEM'
+  round: 1 | 2 | null
+  kind: string
+  message: string
+}
+
+/** GET /runs/{id}/decisions: what each agent was given, decided and why, then what Python decided. */
+export interface DecisionLog {
+  run_id: string
+  status: RunState['status']
+  finished: boolean
+  flight_id: string | null
+  clock: string | null
+  rounds: Partial<Record<'1' | '2', { started_at: string; agents: Record<Role, AgentDecision> }>>
+  board: { at: string; candidates: BoardCandidate[] } | null
+  decision: {
+    baseline_feasible: boolean | null
+    unanimous_candidates: string[] | null
+    selected_hash: string | null
+    domain_costs: Record<Role, number> | null
+    fairness_policy: string | null
+    no_unanimous_plan: boolean
+    fallback_reason: string | null
+    rejections: { plans: number; most_common: { constraint_id: string; plans: number }[] } | null
+    commit: {
+      plan_hash: string
+      runway_id: string | null
+      snapshot_before: string
+      snapshot_after: string
+      reservations: number
+    } | null
+    terminal: { status: RunStatus; reason: string; reason_text: string } | null
+  }
+  timeline: TimelineEntry[]
 }

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { busyPeriodErrors, type BusyPeriod } from './busyPeriods'
-import { clockTime, formatCheckValue, improvements, minutesAfter, reasonText } from './labels'
-import { readNegotiation, runwayOf } from './negotiation'
+import { clockTime, formatCheckValue, improvements, minutesAfter } from './labels'
 import consensus from './test/fixtures/consensus.json'
 import escalated from './test/fixtures/escalated.json'
-import type { AuditEvent, RunResult } from './types'
+import fallback from './test/fixtures/fallback.json'
+import { agentLog, agentStatus, boardStatus, skippedReason, systemLog, type RunView } from './trace'
+import type { DecisionLog, RunResult } from './types'
 
 const period = (id: string, gate: string, start: number, end: number, airport = 'DFW'): BusyPeriod => ({
   id,
@@ -55,8 +56,6 @@ describe('labels', () => {
   it('formats scenario times', () => {
     expect(clockTime('2026-10-31T06:25:00Z')).toBe('06:25')
     expect(minutesAfter('2026-10-31T06:25:00Z', '2026-10-31T06:00:00Z')).toBe('+25 min')
-    expect(reasonText('NO_UNANIMOUS_PLAN')).toBe('No feasible plan was accepted by all three roles.')
-    expect(reasonText('SOMETHING_NEW')).toBe('something new')
   })
 
   it('formats check values in readable units', () => {
@@ -70,26 +69,46 @@ describe('labels', () => {
   })
 })
 
-describe('readNegotiation', () => {
-  it('rebuilds both rounds, the board and the commit of a consensus run', () => {
-    const result = consensus.result as unknown as RunResult
-    const view = readNegotiation(consensus.events as unknown as AuditEvent[])
-    expect(view.clock).toBe('2026-10-31T06:00:00Z')
-    expect(Object.keys(view.rounds[1] ?? {})).toEqual(['ATC', 'PILOT', 'GROUND'])
-    expect(view.rounds[1]?.GROUND?.proposals.length).toBeGreaterThan(0)
-    expect(view.rounds[2]?.ATC?.votes.length).toBe(view.board?.filter((e) => e.feasible).length)
-    expect(view.selectedHash).toBe(result.selected_plan?.plan_hash)
-    expect(view.unanimous).toContain(result.selected_plan?.candidate_id)
-    expect(view.commit?.snapshotAfter).toMatch(/:v2$/)
-    const action = result.selected_plan!.action
-    expect(runwayOf(view, action.airport, action.taxi_path_id)).toBe('R1')
+const finished = (fixture: { result: unknown; decisions: unknown }): RunView => ({
+  log: fixture.decisions as DecisionLog,
+  result: fixture.result as RunResult,
+})
+
+describe('trace', () => {
+  it('marks every agent complete and splits the log by role and round', () => {
+    const run = finished(consensus)
+    expect(agentStatus(run, 1, 'ATC')).toBe('complete')
+    expect(agentStatus(run, 2, 'GROUND')).toBe('complete')
+    expect(boardStatus(run)).toBe('complete')
+    expect(agentLog(run, 2, 'PILOT')[1].message).toMatch(/^Voted on 3 plans/)
+    expect(agentLog(run, 1, 'PILOT').every((line) => !line.message.startsWith('Voted'))).toBe(true)
+    expect(systemLog(run).at(-1)?.message).toMatch(/^Run finished: Consensus/)
   })
 
-  it('records the fallback and rejected plans of an escalated run', () => {
-    const view = readNegotiation(escalated.events as unknown as AuditEvent[])
-    expect(view.rounds[2]).toBeUndefined()
-    expect(view.fallbackStarted).toBe('NO_FEASIBLE_PROPOSALS')
-    expect(view.rejections.length).toBeGreaterThan(0)
-    expect(view.commit).toBeNull()
+  it('skips round 2 after an escalation and says why', () => {
+    const run = finished(escalated)
+    expect(agentStatus(run, 1, 'ATC')).toBe('complete')
+    expect(agentStatus(run, 2, 'ATC')).toBe('skipped')
+    expect(skippedReason(run)).toBe('Not reached. None of the proposed plans passed every hard check.')
+  })
+
+  it('skips every agent step when the run used no agents', () => {
+    const run = finished(fallback)
+    expect(agentStatus(run, 1, 'GROUND')).toBe('skipped')
+    expect(boardStatus(run)).toBe('skipped')
+    expect(skippedReason(run)).toBe('Agents were skipped; the deterministic planner chose directly.')
+  })
+
+  it('shows agents deciding while a round is in progress', () => {
+    const log = structuredClone(consensus.decisions) as DecisionLog
+    log.finished = false
+    log.board = null
+    delete log.rounds[2]
+    log.rounds[1]!.agents.PILOT.status = 'DECIDING'
+    const run: RunView = { log, result: null }
+    expect(agentStatus(run, 1, 'PILOT')).toBe('running')
+    expect(agentStatus(run, 2, 'PILOT')).toBe('waiting')
+    expect(boardStatus(run)).toBe('waiting')
+    expect(agentStatus(null, 1, 'ATC')).toBe('waiting')
   })
 })

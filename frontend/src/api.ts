@@ -1,4 +1,4 @@
-import type { AuditEvent, Options, RunRequest, RunState } from './types'
+import type { DecisionLog, Options, RunRequest, RunResult, RunState } from './types'
 
 export class ApiError extends Error {}
 
@@ -46,22 +46,29 @@ function fetchRun(runId: string): Promise<RunState> {
   return request(`/runs/${runId}`)
 }
 
-export function fetchEvents(runId: string): Promise<AuditEvent[]> {
-  return request(`/runs/${runId}/events`)
+function fetchDecisions(runId: string): Promise<DecisionLog> {
+  return request(`/runs/${runId}/decisions`)
 }
 
-const TERMINAL = new Set(['CONSENSUS', 'FALLBACK', 'ESCALATED', 'FAILED'])
-
-/** Poll until the run reaches a terminal status. Live runs take up to the 30 s total budget. */
-export async function waitForRun(
+/**
+ * Poll a run's decision log until it finishes, reporting each agent's decisions as they are recorded,
+ * then read the final result. Live runs take up to their 150 s total budget.
+ */
+export async function followRun(
   runId: string,
-  { intervalMs = 400, timeoutMs = 60_000 } = {},
-): Promise<RunState> {
+  onProgress: (log: DecisionLog) => void,
+  { intervalMs = 400, timeoutMs = 180_000 } = {},
+): Promise<{ result: RunResult; log: DecisionLog }> {
   const deadline = Date.now() + timeoutMs
   for (;;) {
-    const state = await fetchRun(runId)
-    if (TERMINAL.has(state.status)) return state
-    if (Date.now() > deadline) throw new ApiError('The run did not finish within 60 seconds.')
+    const log = await fetchDecisions(runId)
+    if (log.finished) {
+      const { result } = await fetchRun(runId)
+      if (!result) throw new ApiError('The run finished without a result.')
+      return { result, log }
+    }
+    onProgress(log)
+    if (Date.now() > deadline) throw new ApiError('The run did not finish within 3 minutes.')
     await new Promise((resolve) => setTimeout(resolve, intervalMs))
   }
 }
