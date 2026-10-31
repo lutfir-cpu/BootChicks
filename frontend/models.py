@@ -117,6 +117,7 @@ class Result(Model):
     reason: str
     scenario: Scenario
     mode: str
+    system_prompts: dict[Role, str] = Field(default_factory=dict)
     plan: Candidate | None = None
     rounds: tuple[RoundRecord, ...] = ()
     final_checks: tuple[Check, ...] = ()

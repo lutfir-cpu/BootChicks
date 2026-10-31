@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from agents import ClaudeAgents, SimulatedAgents
 from engine import make_candidate, negotiate, validate
 from models import AgentResponse, Gate, Interval, ProposedChanges, Runway, Scenario
+from prompts import DEFAULT_PROMPTS
 from samples import bundled_scenarios
 
 
@@ -275,3 +276,8 @@ def test_claude_adapter_uses_independent_structured_calls(monkeypatch, scenario)
     assert len(calls) == result.api_request_count == 3
     assert len({call["system"] for call in calls}) == 3
     assert all(call["output_format"] is AgentResponse for call in calls)
+    assert result.system_prompts == DEFAULT_PROMPTS
+    assert {
+        json.loads(call["messages"][0]["content"])["role"]: call["system"]
+        for call in calls
+    } == DEFAULT_PROMPTS

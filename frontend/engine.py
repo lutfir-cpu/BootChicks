@@ -1,5 +1,6 @@
 """Small, bounded coordinator. All mandatory checks are evaluated in Python."""
 
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from typing import Protocol
 
@@ -21,6 +22,7 @@ HORIZON_MIN = 60
 class Agent(Protocol):
     mode: str
     is_live: bool
+    system_prompts: Mapping[Role, str]
 
     def evaluate(
         self,
@@ -264,13 +266,15 @@ def revised_candidate(
 def negotiate(s: Scenario, agent: Agent, max_rounds: int = 2) -> Result:
     if max_rounds not in (1, 2, 3):
         raise ValueError("Round limit must be 1, 2 or 3.")
+    # Record exactly which instructions each live role received, including user edits.
+    audit = {"mode": agent.mode, "system_prompts": dict(agent.system_prompts)}
     missing = missing_inputs(s)
     if missing:
         return Result(
             status="Missing information",
             reason="Complete mandatory scenario inputs before running.",
             scenario=s,
-            mode=agent.mode,
+            **audit,
             missing_fields=missing,
         )
     history: list[RoundRecord] = []
@@ -325,7 +329,7 @@ def negotiate(s: Scenario, agent: Agent, max_rounds: int = 2) -> Result:
                     status="Agreed",
                     reason="All three roles accepted the same validated plan version.",
                     scenario=s,
-                    mode=agent.mode,
+                    **audit,
                     plan=candidate,
                     rounds=tuple(history),
                     final_checks=final_checks,
@@ -339,7 +343,7 @@ def negotiate(s: Scenario, agent: Agent, max_rounds: int = 2) -> Result:
                 status="Missing information",
                 reason="An agent requested additional evidence; no plan approved.",
                 scenario=s,
-                mode=agent.mode,
+                **audit,
                 rounds=tuple(history),
                 **counts,
             )
@@ -370,7 +374,7 @@ def negotiate(s: Scenario, agent: Agent, max_rounds: int = 2) -> Result:
             else " No feasible option was found within the 60-minute search horizon."
         ),
         scenario=s,
-        mode=agent.mode,
+        **audit,
         plan=plan,
         rounds=tuple(history),
         final_checks=validate(s, plan) if plan else (),
