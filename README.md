@@ -79,17 +79,23 @@ The original public dataset is [US DOT 2015 Flight Delays and Cancellations on K
 Raw downloads are excluded from Git.
 
 ```sh
-mkdir -p data/raw
+mkdir -p data/raw/flight-delays
 curl -fL 'https://www.kaggle.com/api/v1/datasets/download/usdot/flight-delays' -o data/raw/flight-delays.zip
-python -m zipfile -e data/raw/flight-delays.zip data/raw
-bootchicks select-row --data-dir data/raw --output data/fixtures/selected_trigger.json
+python -m zipfile -e data/raw/flight-delays.zip data/raw/flight-delays
+bootchicks import-flights   # catalogue every supported flight for the web app (about 2 minutes)
+bootchicks select-row --data-dir data/raw/flight-delays --output data/fixtures/selected_trigger.json
 ```
+
+`import-flights` scans all 5,819,079 rows once and stores the 17,310 supported disrupted flights in the app database, with their raw rows, lookups and file hashes.
+The web app then searches them by airline, flight number, origin or date, and rebuilds each flight's exact, validated trigger when picked.
+Without an import, the app offers only the verified UA 1590 fixture.
 
 All three exact header sets are checked.
 Flights stream through `csv.DictReader`; airports and airlines are small keyed lookups.
 Selection preserves the first suitable row in file order with `WEATHER_DELAY > 15 OR LATE_AIRCRAFT_DELAY > 20`, `CANCELLED == 0`, `DIVERTED == 0`, resolvable lookups, usable schedules and a complete supported destination profile.
 The initial destination profile is DFW, with DAL as its alternate.
-Explicit origin/destination IANA zones are configured in `ingestion.py`; unfamiliar numeric airport IDs and unsupported profiles are skipped with recorded reasons, never guessed.
+Every airport's IANA zone is listed explicitly in `data/constraints/airport_timezones.csv`, generated once from `airports.csv` coordinates by `scripts/airport_timezones.py`, with hand-set zones where coordinates are missing or wrong.
+Unfamiliar numeric airport IDs and unsupported profiles are skipped with recorded reasons, never guessed.
 
 Blank numeric cells remain null; nonfinite numbers are rejected.
 HHMM values are parsed as local clock times, including 2400.
@@ -182,6 +188,8 @@ The wrapper can select a labelled synthetic scenario or contain `trigger`, `mode
 The prompts used are recorded in the round 1 `ROUND_INPUT` event, and agent messages carry a `prompt_version` such as `blueprint-agents-v3+custom-<hash>` when edited.
 Fixture and replay runs ignore them.
 - `GET /options` lists scenarios with their airports and gates, the default prompts, whether live mode has an API key and the verified real-flight trigger.
+- `GET /flights?q=` searches imported real flights; `GET /flights/{csv_line}` returns one flight's validated trigger or 404.
+- `GET /runs/{id}/decisions` returns what each agent was given, decided and why, then what Python decided; it works during a run.
 - `GET /airport-capacities` lists the imported capacity rows; `GET /airport-capacities/{iata_code}` returns one airport or 404.
 - `GET /runs/{id}` returns queued/running/terminal state and the saved result.
 - `GET /runs/{id}/events` returns ordered events; `?format=jsonl` exports JSONL.

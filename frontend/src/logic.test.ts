@@ -4,7 +4,17 @@ import { clockTime, formatCheckValue, improvements, minutesAfter } from './label
 import consensus from './test/fixtures/consensus.json'
 import escalated from './test/fixtures/escalated.json'
 import fallback from './test/fixtures/fallback.json'
-import { agentLog, agentStatus, boardStatus, skippedReason, systemLog, type RunView } from './trace'
+import {
+  activeStage,
+  agentLog,
+  agentStatus,
+  boardStatus,
+  keyframes,
+  runAt,
+  skippedReason,
+  systemLog,
+  type RunView,
+} from './trace'
 import type { DecisionLog, RunResult } from './types'
 
 const period = (id: string, gate: string, start: number, end: number, airport = 'DFW'): BusyPeriod => ({
@@ -110,5 +120,50 @@ describe('trace', () => {
     expect(agentStatus(run, 2, 'PILOT')).toBe('waiting')
     expect(boardStatus(run)).toBe('waiting')
     expect(agentStatus(null, 1, 'ATC')).toBe('waiting')
+  })
+})
+
+describe('replay', () => {
+  it('pauses on each round, agent reply and board, then the result', () => {
+    expect(keyframes(finished(consensus))).toEqual(
+      [3, 4, 5, 6, 7, 8, 9, 10, 11, Infinity].map((sequence, i) => ({
+        sequence,
+        steps: [2, 2, 1, 1, 2, 2, 2, 1, 1, 2][i],
+      })),
+    )
+    expect(keyframes(finished(escalated)).map((f) => f.sequence)).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, Infinity])
+    expect(keyframes(finished(fallback))).toEqual([{ sequence: Infinity, steps: 2 }])
+    expect(keyframes({ log: finished(consensus).log, result: null }).at(-1)?.sequence).toBe(11)
+  })
+
+  it('rebuilds the run as it looked at each step', () => {
+    const run = finished(consensus)
+    const drafting = runAt(run, 4)
+    expect(drafting.result).toBeNull()
+    expect(drafting.log.finished).toBe(false)
+    expect(agentStatus(drafting, 1, 'ATC')).toBe('complete')
+    expect(agentStatus(drafting, 1, 'PILOT')).toBe('running')
+    expect(drafting.log.rounds[1]!.agents.PILOT.proposals).toEqual([])
+    expect(agentStatus(drafting, 2, 'PILOT')).toBe('waiting')
+    expect(boardStatus(drafting)).toBe('waiting')
+    expect(systemLog(drafting).map((l) => l.message)).toHaveLength(2)
+
+    expect(boardStatus(runAt(run, 6))).toBe('running')
+    expect(boardStatus(runAt(run, 7))).toBe('complete')
+    expect(agentStatus(runAt(run, 8), 2, 'GROUND')).toBe('running')
+    expect(runAt(run, Infinity)).toBe(run)
+  })
+
+  it('names the stage in focus', () => {
+    const run = finished(consensus)
+    expect(activeStage(null, 'stub')).toBe('round1')
+    expect(activeStage(null, 'fallback')).toBe('decision')
+    expect(activeStage(runAt(run, 5), 'stub')).toBe('round1')
+    expect(activeStage(runAt(run, 6), 'stub')).toBe('board')
+    expect(activeStage(runAt(run, 7), 'stub')).toBe('board')
+    expect(activeStage(runAt(run, 8), 'stub')).toBe('round2')
+    expect(activeStage(runAt(run, 10), 'stub')).toBe('round2')
+    expect(activeStage(runAt(run, 11), 'stub')).toBe('decision')
+    expect(activeStage(run, 'stub')).toBe('decision')
   })
 })

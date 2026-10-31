@@ -1,4 +1,4 @@
-"""Select a genuine row, run a simulation, export its evidence or serve the API."""
+"""Select or import genuine rows, run a simulation, export its evidence or serve the API."""
 
 import argparse
 import asyncio
@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from dotenv import load_dotenv
 
+from .catalog import import_flights
 from .ingestion import select_row
 from .negotiation import execute
 from .scenario import request_snapshot
@@ -24,6 +25,13 @@ def main():
     select = commands.add_parser("select-row")
     select.add_argument("--data-dir", type=Path, required=True)
     select.add_argument("--output", type=Path, required=True)
+    flights = commands.add_parser(
+        "import-flights",
+        help="Catalogue every disrupted flight the simulator supports, so the app can pick one",
+    )
+    flights.add_argument(
+        "--data-dir", type=Path, default=Path("data/raw/flight-delays")
+    )
     run = commands.add_parser("run")
     run.add_argument("--trigger", type=Path)
     run.add_argument(
@@ -63,7 +71,7 @@ def main():
         default=Path(__file__).resolve().parents[2] / "frontend/dist",
         help="Built React app to serve at /; skipped when it has not been built",
     )
-    for command in (run, export, serve):
+    for command in (flights, run, export, serve):
         command.add_argument(
             "--database", type=Path, default=Path("data/runs/bootchicks.sqlite")
         )
@@ -91,6 +99,22 @@ def main():
             )
             return
         store = Store(args.database)
+        if args.command == "import-flights":
+            print(
+                f"Scanning {args.data_dir / 'flights.csv'}; this takes a few minutes."
+            )
+            summary = import_flights(
+                store,
+                args.data_dir,
+                progress=lambda n: print(f"  {n:,} flights found", end="\r"),
+            )
+            print(
+                f"Imported {summary['supported']:,} supported flights out of "
+                f"{summary['disrupted']:,} disrupted and {summary['rows']:,} total rows into {args.database}."
+            )
+            for reason, count in summary["skipped"].items():
+                print(f"  skipped {count:,}: {reason}")
+            return
         if args.command == "run":
             trigger = (
                 WorkflowInput.model_validate_json(args.trigger.read_bytes())

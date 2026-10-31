@@ -6,9 +6,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Literal
 
-from fastapi import FastAPI, Header, HTTPException, Response
+from fastapi import FastAPI, Header, HTTPException, Query, Response
 from fastapi.staticfiles import StaticFiles
 
+from .catalog import flight_trigger, import_summary, search_flights
 from .decisions import decision_log
 from .negotiation import execute
 from .providers import DEFAULT_PROMPTS, PROMPT_VERSION
@@ -165,6 +166,24 @@ def create_app(database=None, provider_factory=None, frontend_dir=None):
         except KeyError as exc:
             raise HTTPException(404, "Run not found") from exc
         return decision_log(state, events)
+
+    @app.get("/flights")
+    async def read_flights(
+        q: str = "", limit: Annotated[int, Query(ge=1, le=200)] = 50
+    ):
+        """Search the imported real flights; `imported` is null until `bootchicks import-flights` has run."""
+        return {
+            "imported": import_summary(app.state.store),
+            **search_flights(app.state.store, q, limit),
+        }
+
+    @app.get("/flights/{csv_line}")
+    async def read_flight(csv_line: int):
+        """The validated run trigger for one imported flight."""
+        trigger = flight_trigger(app.state.store, csv_line)
+        if trigger is None:
+            raise HTTPException(404, "Flight not imported")
+        return trigger
 
     @app.get("/options")
     async def read_options():

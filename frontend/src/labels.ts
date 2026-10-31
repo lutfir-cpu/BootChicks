@@ -1,4 +1,4 @@
-import type { PlannedAction, Role, RunStatus } from './types'
+import type { Action, PlannedAction, Role, RunStatus } from './types'
 
 export const ROLE_NAMES: Record<Role, string> = {
   ATC: 'ATC',
@@ -9,11 +9,11 @@ export const ROLE_NAMES: Record<Role, string> = {
 export const STATUS_TEXT: Record<RunStatus, { title: string; summary: string }> = {
   CONSENSUS: {
     title: 'Consensus',
-    summary: 'All three roles accepted the same validated plan, and its resources were committed.',
+    summary: 'All three roles accepted the same checked plan. Its resources are committed.',
   },
   FALLBACK: {
     title: 'Fallback plan',
-    summary: 'The roles did not agree, so deterministic code chose a plan that passes every hard check. This is not agent consensus.',
+    summary: 'The roles did not agree. Deterministic code chose a plan that passes every hard check; this is not agent consensus.',
   },
   REVIEW_REQUIRED: {
     title: 'Human review required',
@@ -25,7 +25,7 @@ export const STATUS_TEXT: Record<RunStatus, { title: string; summary: string }> 
   },
   FAILED: {
     title: 'Run failed',
-    summary: 'The run stopped before reaching a decision. Nothing was booked.',
+    summary: 'The run stopped before a decision. Nothing was booked.',
   },
 }
 
@@ -44,6 +44,12 @@ export function clockTime(iso: string): string {
 /** A plan in one line, e.g. "06:25 · R1 · gate B2". */
 export function actionText(action: PlannedAction): string {
   return `${clockTime(action.landing_slot)} · ${action.runway_id ?? action.airport} · gate ${action.gate_id}`
+}
+
+/** The chosen plan as a plain sentence, e.g. "Land at DFW · R1 · 06:25 · gate B2". */
+export function planHeadline(action: Action, runway: string | null | undefined): string {
+  const verb = action.action === 'DIVERT' ? `Divert to ${action.airport}` : `Land at ${action.airport}`
+  return [verb, runway, clockTime(action.landing_slot), `gate ${action.gate_id}`].filter(Boolean).join(' · ')
 }
 
 /** Minutes after the scenario clock, e.g. "+25 min". */

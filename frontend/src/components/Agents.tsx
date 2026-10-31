@@ -1,7 +1,7 @@
 import { actionText, clockTime, ROLE_NAMES } from '../labels'
 import { agentLog, agentStatus, skippedReason, type RunView } from '../trace'
 import type { AgentDecision, Given, Proposal, Role, Vote } from '../types'
-import { DataLine, Loading, LogPanel, Panel, StatusBadge } from './Layout'
+import { DataLine, Loading, LogPanel, StatusBadge } from './Layout'
 
 const LABELS: Record<Proposal['label'], string> = {
   preferred: 'Preferred',
@@ -14,7 +14,7 @@ function GivenRow({ given, round }: { given: Given[]; round: 1 | 2 }) {
     <details className="plan-row given">
       <summary>
         <span>{round === 1 ? 'Constraints given' : 'Board given'}</span>
-        <span className="plan-stance">{given.length} items</span>
+        <span className="plan-stance">{given.length}</span>
       </summary>
       <div className="plan-fields">
         {given.map((item) => (
@@ -30,7 +30,7 @@ function ProposalRow({ proposal }: { proposal: Proposal }) {
   return (
     <details className="plan-row">
       <summary>
-        <span className="mono">{actionText(a)}</span>
+        <span className="plan-text">{actionText(a)}</span>
         <span className="plan-stance">{LABELS[proposal.label]}</span>
       </summary>
       <div className="plan-fields">
@@ -43,7 +43,7 @@ function ProposalRow({ proposal }: { proposal: Proposal }) {
         <DataLine label="Crew" value={a.crew_id} />
         <p className="reasoning">{proposal.rationale}</p>
         {proposal.requested_concessions.length > 0 && (
-          <p className="reasoning subtle">Asks others to concede: {proposal.requested_concessions.join(' ')}</p>
+          <p className="reasoning subtle">Asks: {proposal.requested_concessions.join(' ')}</p>
         )}
       </div>
     </details>
@@ -61,18 +61,18 @@ function VoteRow({ vote }: { vote: Vote }) {
   return (
     <details className="plan-row">
       <summary>
-        <span className="mono">{vote.action ? actionText(vote.action) : vote.candidate_id.slice(0, 8)}</span>
+        <span className="plan-text">{vote.action ? actionText(vote.action) : vote.candidate_id.slice(0, 8)}</span>
         <span className={`plan-stance ${supported ? 'pass' : 'fail'}`}>
           {label} · #{vote.preference_rank}
         </span>
       </summary>
       <div className="plan-fields">
         <DataLine label="Plan" value={<span className="mono">{vote.candidate_id.slice(0, 8)}</span>} />
-        <DataLine label="Preference rank" value={`#${vote.preference_rank}`} />
-        {vote.reason_codes.length > 0 && <DataLine label="Reason codes" value={vote.reason_codes.join(', ')} />}
+        <DataLine label="Preference" value={`#${vote.preference_rank}`} />
+        {vote.reason_codes.length > 0 && <DataLine label="Reasons" value={vote.reason_codes.join(', ')} />}
         <p className="reasoning">{vote.rationale}</p>
         {vote.accepted_concessions.length > 0 && (
-          <p className="reasoning subtle">Accepted concession: {vote.accepted_concessions.join(' ')}</p>
+          <p className="reasoning subtle">Concedes: {vote.accepted_concessions.join(' ')}</p>
         )}
       </div>
     </details>
@@ -94,6 +94,8 @@ function Decided({ agent, round }: { agent: AgentDecision; round: 1 | 2 }) {
   )
 }
 
+const IDLE_TEXT = { 1: 'Proposes up to three plans.', 2: 'Votes on every feasible plan.' }
+
 export function AgentCard({ role, round, run }: { role: Role; round: 1 | 2; run: RunView | null }) {
   const status = agentStatus(run, round, role)
   const agent = run?.log.rounds[round]?.agents[role]
@@ -104,27 +106,25 @@ export function AgentCard({ role, round, run }: { role: Role; round: 1 | 2; run:
         <h3>{name}</h3>
         <StatusBadge status={status} />
       </div>
-      <LogPanel label={`${name} round ${round} logs`} lines={run ? agentLog(run, round, role) : []} />
-      <Panel title={round === 1 ? 'Proposals' : 'Votes'}>
+      <div className="agent-body">
         {agent && <GivenRow given={agent.given} round={round} />}
         {status === 'complete' && agent && <Decided agent={agent} round={round} />}
-        {status === 'running' && (
-          <Loading>{round === 1 ? 'Drafting complete plans...' : 'Reviewing the board...'}</Loading>
-        )}
+        {status === 'running' && <Loading>{round === 1 ? 'Drafting plans...' : 'Reviewing the board...'}</Loading>}
         {status === 'error' && (
           <p className="error-message" role="alert">
             No reply. {agent?.absent_reason}
           </p>
         )}
         {status === 'skipped' && run && <p className="empty-value">{skippedReason(run)}</p>}
-        {status === 'waiting' && <p className="empty-value">Waiting.</p>}
-        {agent?.provider && (
-          <p className="provenance">
-            {agent.model ? `${agent.provider} · ${agent.model}` : agent.provider}
-            {agent.custom_prompt && <span className="count-badge">Edited prompt</span>}
-          </p>
-        )}
-      </Panel>
+        {status === 'waiting' && <p className="empty-value">{IDLE_TEXT[round]}</p>}
+      </div>
+      {agent?.provider && (
+        <p className="provenance">
+          {agent.model ? `${agent.provider} · ${agent.model}` : agent.provider}
+          {agent.custom_prompt && <span className="count-badge">Edited prompt</span>}
+        </p>
+      )}
+      <LogPanel label={`${name} round ${round} log`} lines={run ? agentLog(run, round, role) : []} />
     </article>
   )
 }

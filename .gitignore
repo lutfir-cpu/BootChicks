@@ -9,3 +9,6 @@ data/runs/
 *.egg-info/
 build/
 dist/
+
+# design-taste-frontend inspector output
+.taste-skill/

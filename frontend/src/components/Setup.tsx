@@ -1,9 +1,20 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
+import { fetchFlight, searchFlights } from '../api'
 import { busyPeriodErrors, type BusyPeriod } from '../busyPeriods'
 import { formatNumber, ROLE_NAMES } from '../labels'
-import { ROLES, type Mode, type Options, type Role, type ScenarioAirport, type ScenarioOption } from '../types'
+import { CloseIcon, DataLine } from './Layout'
+import {
+  ROLES,
+  type FlightSearch,
+  type Mode,
+  type Options,
+  type Role,
+  type ScenarioAirport,
+  type ScenarioOption,
+  type WorkflowInput,
+} from '../types'
 
-export type FlightSource = 'synthetic' | 'sample'
+export type FlightSource = 'synthetic' | 'real'
 
 const MODES: { mode: Mode; label: string; hint: string }[] = [
   { mode: 'stub', label: 'Fixture agents', hint: 'Deterministic scripted roles. No API calls.' },
@@ -29,10 +40,9 @@ export function ScenarioControls({
   onMode: (mode: Mode) => void
 }) {
   const scenario = options.scenarios.find((s) => s.id === scenarioId)
-  const row = options.sample_trigger.flight_row
   return (
     <div className="input-column">
-      <h2>Scenario controls</h2>
+      <h2>Setup</h2>
       <div className="field">
         <label htmlFor="scenario">Scenario</label>
         <select id="scenario" value={scenarioId} onChange={(e) => onScenario(e.target.value)}>
@@ -48,9 +58,7 @@ export function ScenarioControls({
         <label htmlFor="flight">Flight</label>
         <select id="flight" value={source} onChange={(e) => onSource(e.target.value as FlightSource)}>
           <option value="synthetic">Synthetic demo flight</option>
-          <option value="sample">
-            {row.AIRLINE} {row.FLIGHT_NUMBER}, {row.ORIGIN_AIRPORT} to {row.DESTINATION_AIRPORT}
-          </option>
+          <option value="real">Real flight (US DOT 2015)</option>
         </select>
       </div>
       <div className="field">
@@ -69,7 +77,7 @@ export function ScenarioControls({
         </p>
         {!options.live_available && (
           <p className="field-hint">
-            Set <code>ANTHROPIC_API_KEY</code> in <code>.env</code> to enable Claude agents.
+            Claude agents need <code>ANTHROPIC_API_KEY</code> in <code>.env</code>.
           </p>
         )}
       </div>
@@ -79,14 +87,20 @@ export function ScenarioControls({
 
 function Fields({ fields }: { fields: [label: string, value: string][] }) {
   return (
-    <dl className="input-fields">
+    <div className="facts">
       {fields.map(([label, value]) => (
-        <div className="field" key={label}>
-          <dt className="field-label">{label}</dt>
-          <dd className="field-value">{value}</dd>
-        </div>
+        <DataLine key={label} label={label} value={value} />
       ))}
-    </dl>
+    </div>
+  )
+}
+
+function ColumnTitle({ title, badge }: { title: string; badge: string }) {
+  return (
+    <h2 className="column-title">
+      {title}
+      <span className="source-badge sim-badge">{badge}</span>
+    </h2>
   )
 }
 
@@ -96,36 +110,42 @@ function hhmm(value: number): string {
   return `${text.slice(0, 2)}:${text.slice(2)}`
 }
 
-export function FlightRecord({ options, source }: { options: Options; source: FlightSource }) {
-  const trigger = options.sample_trigger
-  const row = trigger.flight_row
+export function FlightRecord({
+  source,
+  trigger,
+  onPick,
+}: {
+  source: FlightSource
+  trigger: WorkflowInput
+  onPick: (trigger: WorkflowInput) => void
+}) {
   if (source === 'synthetic') {
     return (
       <div className="input-column">
-        <h2>Flight record</h2>
-        <div className="source-row">
-          <span className="source-badge sim-badge">Synthetic fixture</span>
-        </div>
+        <ColumnTitle title="Flight" badge="Synthetic" />
         <Fields
           fields={[
-            ['Flight', 'SYNTHETIC-DEMO'],
+            ['Number', 'SYNTHETIC-DEMO'],
             ['Destination', 'DFW'],
           ]}
         />
       </div>
     )
   }
+  const row = trigger.flight_row
   const date = `${row.YEAR}-${String(row.MONTH).padStart(2, '0')}-${String(row.DAY).padStart(2, '0')}`
   return (
     <div className="input-column">
-      <h2>Flight record</h2>
-      <div className="source-row">
-        <span className="source-badge">US DOT dataset</span>
-        <span className="source-badge">CSV line {trigger.provenance.csv_line}</span>
-      </div>
+      <h2 className="column-title">
+        Flight
+        <span className="source-badge" title={`CSV line ${trigger.provenance.csv_line}`}>
+          US DOT 2015
+        </span>
+      </h2>
+      <FlightPicker selected={trigger.provenance.csv_line} onPick={onPick} />
       <Fields
         fields={[
-          ['Flight', `${row.AIRLINE} ${row.FLIGHT_NUMBER}`],
+          ['Number', `${row.AIRLINE} ${row.FLIGHT_NUMBER}`],
           ['Airline', trigger.airline_row.AIRLINE],
           ['Route', `${row.ORIGIN_AIRPORT} to ${row.DESTINATION_AIRPORT}`],
           ['Date', date],
@@ -133,6 +153,74 @@ export function FlightRecord({ options, source }: { options: Options; source: Fl
           ['Arrival delay', row.ARRIVAL_DELAY === null ? 'Not recorded' : `${formatNumber(row.ARRIVAL_DELAY)} min`],
         ]}
       />
+    </div>
+  )
+}
+
+function FlightPicker({ selected, onPick }: { selected: number | null; onPick: (trigger: WorkflowInput) => void }) {
+  const [query, setQuery] = useState('')
+  const [found, setFound] = useState<FlightSearch | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let current = true
+    const timer = setTimeout(() => {
+      searchFlights(query).then(
+        (result) => current && (setFound(result), setError(null)),
+        (e: Error) => current && setError(e.message),
+      )
+    }, 200)
+    return () => {
+      current = false
+      clearTimeout(timer)
+    }
+  }, [query])
+
+  async function pick(csvLine: number) {
+    try {
+      onPick(await fetchFlight(csvLine))
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }
+
+  if (found && !found.imported) {
+    return (
+      <p className="field-hint">
+        Run <code>bootchicks import-flights</code> to choose from every disrupted 2015 arrival.
+      </p>
+    )
+  }
+  return (
+    <div className="field">
+      <label htmlFor="flight-search">Search disrupted DFW arrivals</label>
+      <input
+        id="flight-search"
+        type="search"
+        placeholder="Airline, flight, city or date"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      <select
+        aria-label="Matching flights"
+        size={6}
+        value={selected ?? ''}
+        onChange={(e) => pick(Number(e.target.value))}
+        className="flight-list"
+      >
+        {found?.flights.map((f) => (
+          <option key={f.csv_line} value={f.csv_line}>
+            {f.date} · {f.airline} {f.flight_number} · {f.origin} · +{f.delay_min} min
+          </option>
+        ))}
+      </select>
+      {found?.imported && (
+        <p className="field-hint">
+          {formatNumber(found.matches)} of {formatNumber(found.imported.supported)} flights
+          {found.matches > found.flights.length && `; showing the first ${found.flights.length}`}.
+        </p>
+      )}
+      {error && <p className="field-error">{error}</p>}
     </div>
   )
 }
@@ -156,11 +244,7 @@ export function AirportState({ scenario }: { scenario: ScenarioOption }) {
   const alternate = scenario.airports.find((airport) => airport.kind === 'alternate')
   return (
     <div className="input-column">
-      <h2>Simulated airport state</h2>
-      <div className="source-row">
-        <span className="source-badge sim-badge">Simulated inputs</span>
-        <span className="source-badge sim-badge">Mock profiles</span>
-      </div>
+      <ColumnTitle title="Airport" badge="Simulated" />
       <Fields
         fields={[
           ['Aircraft', a.type_label],
@@ -209,14 +293,14 @@ export function BusyPeriodsEditor({
   return (
     <fieldset className="input-column">
       <legend className="section-title">Gate busy periods</legend>
-      <p className="field-hint">Minutes after the scenario starts.</p>
+      {rows.length === 0 && <p className="field-hint">Block a gate for part of the window.</p>}
       {rows.length > 0 && (
         <div className="busy-table" role="table" aria-label="Gate busy periods">
           <div className="busy-row busy-head" role="row">
             <span role="columnheader">Airport</span>
             <span role="columnheader">Gate</span>
-            <span role="columnheader">From</span>
-            <span role="columnheader">Until</span>
+            <span role="columnheader">From (min)</span>
+            <span role="columnheader">Until (min)</span>
             <span />
           </div>
           {rows.map((row, index) => (
@@ -266,7 +350,7 @@ export function BusyPeriodsEditor({
                   aria-label={`Remove period ${index + 1}`}
                   onClick={() => onChange(rows.filter((r) => r.id !== row.id))}
                 >
-                  ×
+                  <CloseIcon />
                 </button>
               </div>
               {errors[row.id] && (
@@ -364,7 +448,7 @@ export function PromptEditor({
         )}
         <div className="prompt-actions">
           <span className="field-hint">
-            {prompts[active] === defaults[active] ? 'Default prompt' : 'Edited, saved in this browser'}
+            {prompts[active] === defaults[active] ? 'Default prompt' : 'Edited · saved in this browser'}
           </span>
           <button
             type="button"

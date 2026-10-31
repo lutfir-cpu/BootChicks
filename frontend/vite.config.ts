@@ -10,6 +10,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/options': api,
+      '/flights': api,
       '/runs': api,
       '/airport-capacities': api,
     },

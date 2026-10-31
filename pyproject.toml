@@ -10,7 +10,14 @@ requires-python = ">=3.11"
 dependencies = ["pydantic==2.14.2", "anthropic==1.17.0", "fastapi==0.162.0", "uvicorn==0.54.0", "python-dotenv>=1,<2"]
 
 [project.optional-dependencies]
-dev = ["pytest>=9,<10", "pytest-asyncio>=1,<2", "httpx==0.28.1", "ruff>=0.17,<1"]
+dev = [
+    "pytest>=9,<10",
+    "pytest-asyncio>=1,<2",
+    "httpx==0.28.1",
+    "ruff>=0.17,<1",
+    # Only for scripts/airport_timezones.py.
+    "timezonefinder>=9,<10",
+]
 
 [project.scripts]
 bootchicks = "bootchicks.cli:main"
