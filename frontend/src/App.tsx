@@ -13,6 +13,7 @@ import {
   ScenarioControls,
   type FlightSource,
 } from './components/Setup'
+import bootchickLogo from './assets/images/bootchick.jpg'
 import { STEP_MS, useFollowStage, usePlayback } from './playback'
 import { activeStage, type RunView, type Stage } from './trace'
 import {
@@ -80,9 +81,7 @@ function Shell({
       <header className="topbar">
         <div className="top-inner">
           <div className="brand">
-            <span className="brand-mark" aria-hidden="true">
-              ✈
-            </span>
+            <img className="brand-mark" src={bootchickLogo} alt="" />
             <span>Arrival desk</span>
           </div>
           <div className="top-actions">
