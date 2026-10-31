@@ -36,10 +36,10 @@ export function ProposalBoard({ run }: { run: RunView | null }) {
                     <td className="mono" title={actionText(c.action)}>
                       {c.candidate_id.slice(0, 8)}
                     </td>
-                    <td className="mono">
+                    <td>
                       {clockTime(c.action.landing_slot)} {c.action.runway_id}
                     </td>
-                    <td className="mono">{c.action.gate_id}</td>
+                    <td>{c.action.gate_id}</td>
                     <td>
                       <span className="roles">
                         {c.proposers.map((role) => (

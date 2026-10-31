@@ -30,7 +30,7 @@ function ProposalRow({ proposal }: { proposal: Proposal }) {
   return (
     <details className="plan-row">
       <summary>
-        <span className="mono">{actionText(a)}</span>
+        <span className="plan-text">{actionText(a)}</span>
         <span className="plan-stance">{LABELS[proposal.label]}</span>
       </summary>
       <div className="plan-fields">
@@ -55,7 +55,7 @@ function VoteRow({ vote }: { vote: Vote }) {
   return (
     <details className="plan-row">
       <summary>
-        <span className="mono">{vote.action ? actionText(vote.action) : vote.candidate_id.slice(0, 8)}</span>
+        <span className="plan-text">{vote.action ? actionText(vote.action) : vote.candidate_id.slice(0, 8)}</span>
         <span className={`plan-stance ${accept ? 'pass' : 'fail'}`}>
           {accept ? 'Accept' : 'Reject'} · #{vote.preference_rank}
         </span>

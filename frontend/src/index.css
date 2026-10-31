@@ -17,9 +17,23 @@
   --pass: #278b68;
   --warn: #d99a32;
   --fail: #b34242;
-  --mono: 'Space Mono', ui-monospace, monospace;
+  /* One grotesk for all text; the mono has one job, IDs and keys. */
+  --font: 'Public Sans', Inter, system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
 
-  font-family: 'DM Sans', Arial, sans-serif;
+  /* Type scale, sized for a projector as much as a laptop. */
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-md: 17px;
+  --text-lg: 20px;
+  --text-xl: 26px;
+  font-size: var(--text-base);
+  line-height: 1.5;
+
+  font-family: var(--font);
+  /* Times, slots and figures stack in every column. */
+  font-variant-numeric: tabular-nums;
   color: var(--ink);
   background: var(--night);
   font-synthesis: none;
@@ -126,9 +140,9 @@ a {
   display: flex;
   align-items: center;
   gap: 11px;
-  font-size: 15px;
+  font-size: var(--text-md);
   font-weight: 700;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.01em;
 }
 
 .brand-mark {
@@ -155,8 +169,8 @@ a {
   background: transparent;
   border: 1px solid #557083;
   border-radius: 8px;
-  padding: 9px 13px;
-  font-size: 12px;
+  padding: 9px 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
 }
 
@@ -182,10 +196,8 @@ a {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 13px;
-  box-shadow: 0 5px 18px #03101d19;
 }
 
-.input-card,
 .wide-card,
 .notice {
   width: 80%;
@@ -194,13 +206,13 @@ a {
 }
 
 .input-card {
-  margin-top: 34px;
-  padding: 26px;
+  margin-top: 40px;
+  padding: 32px;
 }
 
 .wide-card,
 .notice {
-  padding: 24px;
+  padding: 30px;
 }
 
 .notice {
@@ -209,16 +221,17 @@ a {
 
 .input-card h1,
 .notice h1 {
-  margin: 0 0 20px;
-  font-size: 23px;
-  letter-spacing: -0.035em;
+  margin: 0 0 24px;
+  font-size: var(--text-xl);
+  letter-spacing: -0.02em;
 }
 
 /* Input columns */
 
 .input-columns {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* The airport facts carry the longest rows; the flight needs the least room. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr);
   gap: 36px;
   align-items: start;
 }
@@ -239,9 +252,9 @@ a {
 
 .input-column h2,
 .section-title {
-  margin: 0 0 12px;
+  margin: 0 0 14px;
   padding: 0;
-  font-size: 14px;
+  font-size: var(--text-md);
   font-weight: 700;
 }
 
@@ -270,15 +283,15 @@ legend.section-title + * {
 }
 
 .field {
-  margin-bottom: 11px;
+  margin-bottom: 16px;
   min-width: 0;
 }
 
 .field label {
   display: block;
-  margin-bottom: 5px;
+  margin-bottom: 6px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-sm);
   font-weight: 700;
 }
 
@@ -289,19 +302,20 @@ textarea {
   display: block;
   width: 100%;
   min-width: 0;
-  min-height: 35px;
-  padding: 8px 9px;
+  min-height: 42px;
+  padding: 9px 12px;
   background: var(--field);
   border: 1px solid var(--line);
-  border-radius: 6px;
-  font-size: 12px;
+  border-radius: 7px;
+  font-size: var(--text-base);
   overflow-wrap: anywhere;
 }
 
 .flight-list {
   margin-top: 6px;
   padding: 4px;
-  font: 11px/1.5 var(--mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
 }
 
 .flight-list option {
@@ -311,7 +325,7 @@ textarea {
 
 textarea {
   resize: vertical;
-  font: 11px/1.6 var(--mono);
+  line-height: 1.6;
 }
 
 [aria-invalid='true'] {
@@ -319,26 +333,26 @@ textarea {
 }
 
 .field-hint {
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-sm);
   line-height: 1.5;
 }
 
 .field-error,
 .error-message {
-  margin: 4px 0 0;
+  margin: 6px 0 0;
   color: var(--fail);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 .source-badge {
   display: inline-block;
-  padding: 3px 7px;
+  padding: 3px 9px;
   background: var(--panel-dark);
   color: #fff;
   border-radius: 5px;
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: 700;
 }
 
@@ -351,23 +365,23 @@ textarea {
 
 .busy-row {
   display: grid;
-  grid-template-columns: 1.1fr 1fr 1fr 1fr 32px;
-  gap: 6px;
+  grid-template-columns: 1.1fr 1fr 1fr 1fr 40px;
+  gap: 8px;
   align-items: center;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .busy-head {
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-sm);
   font-weight: 700;
 }
 
 .icon-button {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -379,12 +393,12 @@ textarea {
 }
 
 .secondary-button {
-  margin-top: 8px;
-  padding: 7px 12px;
+  margin-top: 10px;
+  padding: 9px 14px;
   background: var(--field);
   border: 1px solid var(--line);
   border-radius: 6px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 600;
 }
 
@@ -418,11 +432,11 @@ textarea {
 
 .count-badge {
   margin-left: 6px;
-  padding: 2px 7px;
+  padding: 2px 9px;
   background: #fdf3e1;
   color: #8a5300;
   border-radius: 99px;
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: 700;
 }
 
@@ -437,13 +451,13 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
+  padding: 8px 12px;
   margin-bottom: -1px;
   background: none;
   border: 0;
   border-bottom: 2px solid transparent;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 .tab[aria-selected='true'] {
@@ -472,8 +486,8 @@ textarea {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  margin-top: 19px;
+  gap: 10px;
+  margin-top: 26px;
   text-align: center;
 }
 
@@ -485,9 +499,9 @@ textarea {
   background: var(--cyan);
   color: var(--ink);
   border: 0;
-  border-radius: 8px;
-  padding: 11px 26px;
-  font-size: 13px;
+  border-radius: 9px;
+  padding: 13px 36px;
+  font-size: var(--text-base);
   font-weight: 700;
 }
 
@@ -502,7 +516,7 @@ textarea {
 .note {
   margin: 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-sm);
 }
 
 /* Workflow */
@@ -525,9 +539,7 @@ textarea {
 
 .stage.is-active .card {
   border-color: var(--cyan);
-  box-shadow:
-    0 0 0 1px var(--cyan),
-    0 8px 30px #35bcd640;
+  box-shadow: 0 0 0 1px var(--cyan); /* taste-skill-ignore: the selection ring, not a glow */
 }
 
 .stage.is-active .turn-title::before {
@@ -538,60 +550,60 @@ textarea {
   margin: 0 11px 3px 0;
   border-radius: 50%;
   background: var(--cyan);
-  box-shadow: 0 0 0 0 #35bcd699;
+  box-shadow: 0 0 0 0 #35bcd699; /* taste-skill-ignore: the live beacon's pulse ring */
   animation: beacon 1.4s ease-out infinite;
 }
 
 @keyframes beacon {
   to {
-    box-shadow: 0 0 0 9px #35bcd600;
+    box-shadow: 0 0 0 9px #35bcd600; /* taste-skill-ignore: the pulse ring fading out */
   }
 }
 
 .turn-title {
-  margin: 32px 0 19px;
+  margin: 44px 0 22px;
   color: var(--card);
   text-align: center;
-  font-size: 23px;
+  font-size: var(--text-xl);
   font-weight: 700;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
 }
 
 .agent-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
-  align-items: stretch;
+  align-items: start;
 }
 
 .agent-card {
   min-width: 0;
-  padding: 18px;
+  padding: 22px;
   display: flex;
   flex-direction: column;
 }
 
 .agent-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .agent-head h3 {
   margin: 0;
-  font-size: 17px;
+  font-size: var(--text-lg);
   line-height: 1.3;
 }
 
 .badge {
   flex: none;
-  padding: 4px 7px;
+  padding: 4px 9px;
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: 6px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: 700;
 }
 
@@ -615,8 +627,8 @@ textarea {
 
 .agent-body {
   flex: 1;
-  font-size: 12px;
-  line-height: 1.65;
+  font-size: var(--text-base);
+  line-height: 1.6;
 }
 
 .agent-body p {
@@ -624,14 +636,14 @@ textarea {
 }
 
 .provenance {
-  margin: 10px 0 0;
+  margin: 12px 0 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--text-xs);
 }
 
 .log-panel {
-  margin-top: 14px;
-  padding-top: 10px;
+  margin-top: 16px;
+  padding-top: 12px;
   border-top: 1px solid var(--line-soft);
 }
 
@@ -641,7 +653,7 @@ textarea {
   gap: 6px;
   width: fit-content;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-sm);
   font-weight: 700;
   cursor: pointer;
   list-style: none;
@@ -656,13 +668,14 @@ textarea {
 }
 
 .logs {
-  max-height: 180px;
+  max-height: 240px;
   margin-top: 8px;
   overflow: auto;
-  padding: 10px;
+  padding: 12px 14px;
   background: var(--log);
   border-radius: 7px;
-  font: 10px/1.65 var(--mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
 }
 
 .log-line {
@@ -679,12 +692,12 @@ textarea {
   align-items: center;
   gap: 8px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-sm);
 }
 
 .spinner {
-  width: 13px;
-  height: 13px;
+  width: 15px;
+  height: 15px;
   border: 2px solid var(--line);
   border-top-color: var(--cyan);
   border-radius: 50%;
@@ -701,12 +714,12 @@ textarea {
 /* Accordions */
 
 .plan-row {
-  margin-top: 8px;
-  padding: 8px 10px;
+  margin-top: 10px;
+  padding: 11px 14px;
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 6px;
-  font-size: 11px;
+  border-radius: 8px;
+  font-size: var(--text-base);
 }
 
 .plan-row:first-child {
@@ -752,6 +765,10 @@ textarea {
   transform: rotate(-135deg);
 }
 
+.plan-text {
+  font-weight: 600;
+}
+
 .plan-stance {
   margin-left: auto;
   color: var(--muted);
@@ -784,21 +801,25 @@ textarea {
 
 .data-line {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
-  padding: 7px 0;
+  gap: 16px;
+  padding: 9px 0;
   border-bottom: 1px solid var(--line-soft);
-  font-size: 11px;
+  font-size: var(--text-base);
   line-height: 1.4;
 }
 
 .data-line > span:first-child {
+  flex: none;
   color: var(--muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
 }
 
 .data-line > span:last-child {
   text-align: right;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 /* Decision */
@@ -806,11 +827,11 @@ textarea {
 .verdict {
   --tone: var(--pass);
   --tint: #e3f3ec;
-  margin: -6px -6px 18px;
-  padding: 20px 22px;
+  margin: -8px -8px 24px;
+  padding: 26px 28px;
   background: var(--tint);
   border: 1px solid color-mix(in srgb, var(--tone) 35%, transparent);
-  border-radius: 10px;
+  border-radius: 12px;
 }
 
 .verdict-fallback {
@@ -837,58 +858,60 @@ textarea {
   gap: 10px;
   margin: 0;
   color: var(--tone);
-  font-size: 30px;
+  font-size: 32px;
   line-height: 1.1;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.02em;
 }
 
 .verdict-status::before {
   content: '';
   flex: none;
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: var(--tone);
 }
 
 .verdict-top .subtle {
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .verdict-plan {
-  margin: 12px 0 0;
+  margin: 14px 0 0;
   text-wrap: balance;
-  font: 700 20px/1.3 var(--mono);
-  letter-spacing: -0.02em;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
 }
 
 .verdict-plan.no-plan {
   font-family: inherit;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.01em;
 }
 
 .verdict-summary {
   max-width: 70ch;
-  margin: 8px 0 0;
-  font-size: 14px;
+  margin: 10px 0 0;
+  font-size: var(--text-md);
   line-height: 1.55;
 }
 
 .verdict-gains {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin: 14px 0 0;
+  gap: 10px;
+  margin: 18px 0 0;
   padding: 0;
   list-style: none;
 }
 
 .verdict-gains li {
-  padding: 5px 10px;
+  padding: 6px 13px;
   background: var(--field);
   border: 1px solid color-mix(in srgb, var(--tone) 25%, transparent);
   border-radius: 99px;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 .verdict-gains .gain-intro {
@@ -917,12 +940,12 @@ textarea {
   min-width: 0;
   margin-right: auto;
   margin-left: 18px;
-  padding: 7px 14px;
+  padding: 8px 16px;
   background: color-mix(in srgb, var(--tone) 22%, var(--panel-dark));
   border: 1px solid color-mix(in srgb, var(--tone) 70%, transparent);
   border-radius: 99px;
   color: var(--card);
-  font-size: 12px;
+  font-size: var(--text-sm);
   animation: pill-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -945,8 +968,7 @@ textarea {
 .result-plan {
   overflow: hidden;
   color: #c4d3de;
-  font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -965,14 +987,14 @@ textarea {
 }
 
 .subheading {
-  margin: 19px 0 5px;
-  font-size: 13px;
+  margin: 28px 0 8px;
+  font-size: var(--text-md);
   font-weight: 700;
 }
 
 .run-stats {
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-sm);
 }
 
 .stale {
@@ -997,12 +1019,13 @@ textarea {
 
 .checks summary > :nth-child(2) {
   margin-left: auto;
+  white-space: nowrap;
 }
 
 .audit {
-  margin: 10px 0 0;
+  margin: 12px 0 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-sm);
 }
 
 /* Tables */
@@ -1014,21 +1037,21 @@ textarea {
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
 }
 
 th {
-  padding: 6px 10px;
+  padding: 8px 12px;
   text-align: left;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-xs);
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
 
 td {
-  padding: 7px 10px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--line-soft);
   vertical-align: top;
 }
@@ -1050,9 +1073,9 @@ tr.selected td {
 
 .role {
   display: inline-block;
-  padding: 0 7px;
+  padding: 1px 8px;
   border-radius: 4px;
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: 700;
   line-height: 1.7;
   color: #fff;
@@ -1168,8 +1191,7 @@ tr.selected td {
   padding: 1px 2px;
   background: var(--night);
   color: var(--cyan);
-  font: 700 10px/1 var(--mono);
-  text-shadow: 0 0 6px var(--cyan);
+  font: 500 11px/1 var(--mono); /* taste-skill-ignore: literal bits on the wire */
   transform: translate(-50%, -50%);
   pointer-events: none;
 }
@@ -1286,6 +1308,27 @@ a:focus-visible,
   outline-offset: 3px;
 }
 
+/* Laptop and tablet: Setup and Flight side by side, the airport facts in two columns beneath. */
+@media (max-width: 1180px) and (min-width: 901px) {
+  .input-columns:not(.two) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .input-columns:not(.two) > :last-child {
+    grid-column: 1 / -1;
+  }
+
+  .input-columns:not(.two) > :last-child .facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 36px;
+  }
+
+  .input-columns:not(.two) > :last-child .facts .data-line:nth-child(2) {
+    padding-top: 0;
+  }
+}
+
 @media (max-width: 900px) {
   .input-card,
   .wide-card,
@@ -1315,11 +1358,11 @@ a:focus-visible,
   }
 
   .verdict-status {
-    font-size: 25px;
+    font-size: 26px;
   }
 
   .verdict-plan {
-    font-size: 16px;
+    font-size: 19px;
   }
 
   .input-card,
@@ -1332,7 +1375,7 @@ a:focus-visible,
   }
 
   .turn-title {
-    font-size: 20px;
+    font-size: 22px;
   }
 }
 
