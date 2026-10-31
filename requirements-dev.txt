@@ -1,1 +1,1 @@
--e .[dev,legacy-ui]
+-e .[dev]

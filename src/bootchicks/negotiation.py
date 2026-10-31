@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from .constraints import evaluate, fairness_rank, fallback_rank, improvement
 from .providers import PROMPT_VERSION, ClaudeProvider, ReplayProvider, StubProvider
-from .scenario import actions, candidate, catalogue, load_snapshot
+from .scenario import actions, candidate, catalogue, request_snapshot
 from .schemas import (
     ROLES,
     ConsensusCertificate,
@@ -181,7 +181,7 @@ async def role_round(
             "response_origin": provider.origin,
             "provider": provider.name,
             "model": provider.model,
-            "prompt_version": PROMPT_VERSION,
+            "prompt_version": getattr(provider, "prompt_version", PROMPT_VERSION),
             "response": reply.model_dump(mode="json"),
         }
         event = store.append(run_id, "AGENT_MESSAGE", payload)
@@ -260,16 +260,8 @@ async def execute(store, run_id, request: RunRequest, provider=None) -> RunResul
         else Provenance(source_type="synthetic_fixture")
     )
     store.running(run_id)
-    scenario_id = (
-        request.trigger.scenario_id if request.trigger else request.scenario_id
-    )
     snapshot = store.load_or_seed(
-        load_snapshot(
-            scenario_id,
-            request.trigger,
-            capacities=store.airport_capacities(request.capacity_version),
-            gate_occupancies=request.gate_occupancies,
-        )
+        request_snapshot(request, store.airport_capacities(request.capacity_version))
     )
     baseline = None
     store.append(
@@ -389,17 +381,22 @@ async def execute(store, run_id, request: RunRequest, provider=None) -> RunResul
             if request.mode == "stub":
                 provider = StubProvider()
             elif request.mode == "live":
-                provider = ClaudeProvider()
+                provider = ClaudeProvider(request.role_prompts)
                 owned_provider = True
             elif request.mode == "recorded_replay":
                 provider = ReplayProvider(os.environ["BOOTCHICKS_REPLAY_FILE"])
         contexts = role_contexts(snapshot)
+        prompt_version = getattr(provider, "prompt_version", PROMPT_VERSION)
         # Contexts contain permitted normalized inputs and mock profiles, never historical final outcomes.
-        store.append(
-            run_id,
-            "ROUND_INPUT",
-            {"round": 1, "contexts": contexts, "prompt_version": PROMPT_VERSION},
-        )
+        round_input = {
+            "round": 1,
+            "contexts": contexts,
+            "prompt_version": prompt_version,
+        }
+        if getattr(provider, "system_prompts", None):
+            # Record the exact instructions each live role receives, including user edits.
+            round_input["system_prompts"] = provider.system_prompts
+        store.append(run_id, "ROUND_INPUT", round_input)
         first, board, failed = await role_round(
             store, run_id, snapshot, provider, 1, contexts, request, deadline, counts
         )
@@ -445,7 +442,11 @@ async def execute(store, run_id, request: RunRequest, provider=None) -> RunResul
         store.append(
             run_id,
             "ROUND_INPUT",
-            {"round": 2, "contexts": second_contexts, "prompt_version": PROMPT_VERSION},
+            {
+                "round": 2,
+                "contexts": second_contexts,
+                "prompt_version": prompt_version,
+            },
         )
         second, vote_events, failed = await role_round(
             store,

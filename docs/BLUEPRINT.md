@@ -118,9 +118,8 @@ Do not add mock fuel or gate fields to the original CSV schema.
 Mandatory challenge condition:
 
 ```python
-eligible = (
-   (weather_delay is not None and weather_delay > 15)
-   or (late_aircraft_delay is not None and late_aircraft_delay > 20)
+eligible = (weather_delay is not None and weather_delay > 15) or (
+    late_aircraft_delay is not None and late_aircraft_delay > 20
 )
 ```
 
@@ -560,8 +559,9 @@ A future LangGraph integration can wrap the same services if checkpointing/branc
 Define one provider-neutral interface:
 
 ```python
-async def respond(agent_role, round_number, typed_context, response_schema):
-   ...  # one independent model request; typed result or explicit error
+async def respond(
+    agent_role, round_number, typed_context, response_schema
+): ...  # one independent model request; typed result or explicit error
 ```
 
 Choose the provider for which the team already has API access, configure the model ID through environment settings, and pin the tested SDK version.
@@ -617,38 +617,37 @@ Mark jobs interrupted by restart as failed rather than silently rerunning and do
 
 ```python
 async def negotiate(request):
-   run = validate_and_open_run(request)
-   snapshot, catalogue = build_complete_snapshot(run)
-   baseline = compute_baseline(snapshot, catalogue)
+    run = validate_and_open_run(request)
+    snapshot, catalogue = build_complete_snapshot(run)
+    baseline = compute_baseline(snapshot, catalogue)
 
-   # All steps below share the run deadline; any exception is logged.
-   first = await parallel_role_calls(round=1, snapshot=snapshot,
-                                     catalogue=catalogue)
-   if not all_three_valid(first):
-       return fallback_and_finish(run, reason="ROUND_1_FAILURE")
+    # All steps below share the run deadline; any exception is logged.
+    first = await parallel_role_calls(round=1, snapshot=snapshot, catalogue=catalogue)
+    if not all_three_valid(first):
+        return fallback_and_finish(run, reason="ROUND_1_FAILURE")
 
-   candidates = canonicalize_and_deduplicate(first.proposals)
-   evaluations = validate_all(candidates, snapshot)
-   feasible = only_fully_feasible(evaluations)
-   if not feasible:
-       return fallback_and_finish(run, reason="NO_FEASIBLE_PROPOSALS")
+    candidates = canonicalize_and_deduplicate(first.proposals)
+    evaluations = validate_all(candidates, snapshot)
+    feasible = only_fully_feasible(evaluations)
+    if not feasible:
+        return fallback_and_finish(run, reason="NO_FEASIBLE_PROPOSALS")
 
-   second = await parallel_role_calls(round=2, snapshot=snapshot,
-                                      proposal_board=first,
-                                      evaluations=evaluations)
-   if not all_three_valid(second):
-       return fallback_and_finish(run, reason="ROUND_2_FAILURE")
+    second = await parallel_role_calls(
+        round=2, snapshot=snapshot, proposal_board=first, evaluations=evaluations
+    )
+    if not all_three_valid(second):
+        return fallback_and_finish(run, reason="ROUND_2_FAILURE")
 
-   common = unanimous_accepted_candidates(second, feasible)
-   if not common:
-       return fallback_and_finish(run, reason="NO_UNANIMOUS_PLAN")
+    common = unanimous_accepted_candidates(second, feasible)
+    if not common:
+        return fallback_and_finish(run, reason="NO_UNANIMOUS_PLAN")
 
-   winner = select_by_frozen_policy(common, snapshot)
-   committed = revalidate_and_commit_atomically(winner, snapshot.version)
-   if not committed:
-       return fallback_and_finish(run, reason="COMMIT_REVALIDATION_FAILED")
+    winner = select_by_frozen_policy(common, snapshot)
+    committed = revalidate_and_commit_atomically(winner, snapshot.version)
+    if not committed:
+        return fallback_and_finish(run, reason="COMMIT_REVALIDATION_FAILED")
 
-   return finish_consensus(run, winner, second, baseline, committed)
+    return finish_consensus(run, winner, second, baseline, committed)
 ```
 
 The actual implementation must pass explicit run state rather than relying on globals.

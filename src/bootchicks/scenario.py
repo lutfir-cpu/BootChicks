@@ -8,6 +8,28 @@ from .ingestion import normalize
 from .schemas import Action, CandidatePlan, RunRequest, Snapshot, WorkflowInput, digest
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+SCENARIOS = {
+    "runway_closure_gate_conflict_v1": {
+        "label": "Runway closure and gate conflict",
+        "description": "R1 is closed until 06:22 and R2 for the whole window. "
+        "Ground prefers the assigned gate A1; ATC and Pilot prefer an earlier slot at B2.",
+    },
+    "insufficient_fuel": {
+        "label": "Insufficient fuel",
+        "description": "Fuel onboard is cut to 4,300 kg, below the protected floors for every option. "
+        "Expect escalation for human review.",
+    },
+    "no_gate": {
+        "label": "No compatible gate",
+        "description": "No gate at DFW or the DAL alternate accepts this aircraft. "
+        "Expect escalation for human review.",
+    },
+    "diversion": {
+        "label": "Diversion to alternate",
+        "description": "Every DFW runway is closed for the whole window. "
+        "The deterministic fallback validates a diversion to DAL.",
+    },
+}
 
 
 def load_snapshot(
@@ -16,6 +38,7 @@ def load_snapshot(
     *,
     capacities=None,
     gate_occupancies=(),
+    environment=None,
 ) -> Snapshot:
     base = Snapshot.model_validate_json(
         (DATA_DIR / "scenarios/blueprint_v1.json").read_bytes()
@@ -114,21 +137,30 @@ def load_snapshot(
                 "wake_class": "M",
             }
         )
-    if capacities is not None or occupancies:
-        payload["environment_id"] = digest(
-            {
-                "base_environment": payload["environment_id"],
-                "capacity_rows": [a.get("capacity") for a in airports.values()],
-                "gate_occupancies": [
-                    busy.model_dump(mode="json") for busy in occupancies
-                ],
-            }
-        )[:24]
+    if capacities is not None or occupancies or environment:
+        identity = {
+            "base_environment": payload["environment_id"],
+            "capacity_rows": [a.get("capacity") for a in airports.values()],
+            "gate_occupancies": [busy.model_dump(mode="json") for busy in occupancies],
+        }
+        if environment:
+            identity["environment"] = environment
+        payload["environment_id"] = digest(identity)[:24]
     if occupancies:
         payload["operational_provenance"]["gate_occupancies"] = (
             "User-defined half-open intervals, minutes relative to scenario clock; saved as UTC reservations."
         )
     return Snapshot.model_validate(payload)
+
+
+def request_snapshot(request: RunRequest, capacities) -> Snapshot:
+    return load_snapshot(
+        request.trigger.scenario_id if request.trigger else request.scenario_id,
+        request.trigger,
+        capacities=capacities,
+        gate_occupancies=request.gate_occupancies,
+        environment=request.environment,
+    )
 
 
 def candidate(snapshot: Snapshot, action: Action, proposers=()) -> CandidatePlan:

@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 from .ingestion import select_row
 from .negotiation import execute
-from .scenario import load_snapshot
+from .scenario import request_snapshot
 from .schemas import RunRequest, WorkflowInput
 from .store import Store
 
@@ -57,6 +57,12 @@ def main():
     export.add_argument("--output", type=Path)
     serve = commands.add_parser("serve")
     serve.add_argument("--port", type=int, default=8000)
+    serve.add_argument(
+        "--frontend-dir",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "frontend/dist",
+        help="Built React app to serve at /; skipped when it has not been built",
+    )
     for command in (run, export, serve):
         command.add_argument(
             "--database", type=Path, default=Path("data/runs/bootchicks.sqlite")
@@ -75,6 +81,7 @@ def main():
             import uvicorn
 
             os.environ["BOOTCHICKS_DATABASE"] = str(args.database)
+            os.environ["BOOTCHICKS_FRONTEND_DIR"] = str(args.frontend_dir)
             uvicorn.run(
                 "bootchicks.api:create_app",
                 factory=True,
@@ -105,11 +112,8 @@ def main():
                 if args.gate_occupancies
                 else (),
             )
-            load_snapshot(
-                args.scenario,
-                trigger,
-                capacities=store.airport_capacities(request.capacity_version),
-                gate_occupancies=request.gate_occupancies,
+            request_snapshot(
+                request, store.airport_capacities(request.capacity_version)
             )
             with store.process_lock():
                 store.recover_interrupted()
