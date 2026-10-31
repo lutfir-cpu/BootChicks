@@ -587,6 +587,28 @@ textarea {
   margin-bottom: 16px;
 }
 
+.agent-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.agent-chick {
+  display: block;
+  width: 32px;
+  height: 32px;
+  border: 1.5px solid var(--cyan);
+  border-radius: 7px;
+  background: #fff;
+  object-fit: cover;
+  flex: none;
+}
+
+.agent-chick.is-loading {
+  animation: chick-pulse 1s ease-in-out infinite;
+}
+
 .agent-head h3 {
   margin: 0;
   font-size: var(--text-lg);
@@ -688,7 +710,6 @@ textarea {
   align-items: center;
   gap: 8px;
   color: var(--muted);
-  font-size: var(--text-sm);
 }
 
 .loading-chick {

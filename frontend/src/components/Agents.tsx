@@ -1,6 +1,9 @@
+import atcChick from '../assets/images/chick-atc.jpg'
+import groundChick from '../assets/images/chick-ground.jpg'
+import pilotChick from '../assets/images/chick-pilot.jpg'
 import { actionText, clockTime, ROLE_NAMES } from '../labels'
 import { agentLog, agentStatus, skippedReason, type RunView } from '../trace'
-import type { AgentDecision, Given, Proposal, Role, Vote } from '../types'
+import { ROLES, type AgentDecision, type Given, type Proposal, type Role, type Vote } from '../types'
 import { DataLine, Loading, LogPanel, StatusBadge } from './Layout'
 
 const LABELS: Record<Proposal['label'], string> = {
@@ -94,6 +97,8 @@ function Decided({ agent, round }: { agent: AgentDecision; round: 1 | 2 }) {
   )
 }
 
+const ROLE_CHICKS: Record<Role, string> = { ATC: atcChick, GROUND: groundChick, PILOT: pilotChick }
+
 const IDLE_TEXT = { 1: 'Proposes up to three plans.', 2: 'Votes on every feasible plan.' }
 
 export function AgentCard({ role, round, run }: { role: Role; round: 1 | 2; run: RunView | null }) {
@@ -103,13 +108,21 @@ export function AgentCard({ role, round, run }: { role: Role; round: 1 | 2; run:
   return (
     <article className="card agent-card" aria-label={`${name}, round ${round}`}>
       <div className="agent-head">
-        <h3>{name}</h3>
+        <div className="agent-title">
+          <img
+            className={status === 'running' ? 'agent-chick is-loading' : 'agent-chick'}
+            src={ROLE_CHICKS[role]}
+            alt=""
+            aria-hidden="true"
+          />
+          <h3>{name}</h3>
+        </div>
         <StatusBadge status={status} />
       </div>
       <div className="agent-body">
         {agent && <GivenRow given={agent.given} round={round} />}
         {status === 'complete' && agent && <Decided agent={agent} round={round} />}
-        {status === 'running' && <Loading>{round === 1 ? 'Drafting plans...' : 'Reviewing the board...'}</Loading>}
+        {status === 'running' && <Loading icon={null} offset={ROLES.indexOf(role)} />}
         {status === 'error' && (
           <p className="error-message" role="alert">
             No reply. {agent?.absent_reason}

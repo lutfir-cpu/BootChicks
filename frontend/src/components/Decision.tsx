@@ -43,7 +43,7 @@ export function DecisionCard({
         {result && run ? (
           <Outcome result={result} log={run.log} stale={stale} />
         ) : run ? (
-          <Loading>Waiting for the agents and checks...</Loading>
+          <Loading offset={4} />
         ) : (
           <p className="empty-value">Run a negotiation to see the chosen plan and every check behind it.</p>
         )}

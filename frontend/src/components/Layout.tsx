@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode, Ref } from 'react'
+import { useEffect, useState, type CSSProperties, type ReactNode, type Ref } from 'react'
 import bootchickLogo from '../assets/images/bootchick.jpg'
 import { ROLE_NAMES } from '../labels'
 import type { CardStatus, LogLine } from '../trace'
@@ -48,10 +48,31 @@ export function LogPanel({ label, lines, ref }: { label: string; lines: LogLine[
   )
 }
 
-export function Loading({ children }: { children: ReactNode }) {
+const LOADING_LINES = [
+  'Hatching data, hold your feathers.',
+  'Taxiing files to the runway.',
+  'Pre-flight checks in progress now.',
+  'Ground control syncing your load.',
+  'Clearing airspace for your files.',
+  'Engines spooling up, almost ready.',
+  'Roosting data into position now.',
+]
+
+const LOADING_LINE_MS = 2500
+
+/**
+ * A pulsing chick beside a rotating line; `icon` swaps the BootChicks logo for another image (or `null` when
+ * the caller shows its own), and `offset` staggers the starting line so side-by-side loaders differ.
+ */
+export function Loading({ icon = bootchickLogo, offset = 0 }: { icon?: string | null; offset?: number }) {
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    const timer = setInterval(() => setTick((value) => value + 1), LOADING_LINE_MS)
+    return () => clearInterval(timer)
+  }, [])
   return (
     <p className="loading">
-      <img className="loading-chick" src={bootchickLogo} alt="" aria-hidden="true" /> {children}
+      {icon && <img className="loading-chick" src={icon} alt="" aria-hidden="true" />} {LOADING_LINES[(offset + tick) % LOADING_LINES.length]}
     </p>
   )
 }
