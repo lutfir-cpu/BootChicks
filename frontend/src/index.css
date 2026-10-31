@@ -146,17 +146,13 @@ a {
 }
 
 .brand-mark {
-  display: grid;
-  place-items: center;
-  width: 29px;
-  height: 29px;
+  display: block;
+  width: 38px;
+  height: 38px;
   border: 2px solid var(--cyan);
   border-radius: 8px;
-  color: var(--cyan);
-}
-
-.brand-mark svg {
-  transform: rotate(45deg);
+  background: #fff;
+  object-fit: cover;
 }
 
 .top-actions {

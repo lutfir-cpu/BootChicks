@@ -4,7 +4,7 @@ import { busyPeriodErrors, toOccupancies, type BusyPeriod } from './busyPeriods'
 import { AgentCard } from './components/Agents'
 import { ProposalBoard } from './components/Board'
 import { DecisionCard } from './components/Decision'
-import { BranchConnector, MergeConnector, PlaneIcon } from './components/Layout'
+import { BranchConnector, MergeConnector } from './components/Layout'
 import { planHeadline, STATUS_TEXT } from './labels'
 import {
   AirportState,
@@ -14,6 +14,7 @@ import {
   ScenarioControls,
   type FlightSource,
 } from './components/Setup'
+import bootchickLogo from './assets/images/bootchick.jpg'
 import { STEP_MS, useFollowStage, usePlayback } from './playback'
 import { activeStage, type RunView, type Stage } from './trace'
 import {
@@ -88,9 +89,7 @@ function Shell({
       <header className="topbar">
         <div className="top-inner">
           <div className="brand">
-            <span className="brand-mark">
-              <PlaneIcon />
-            </span>
+            <img className="brand-mark" src={bootchickLogo} alt="" />
             <span>Arrival desk</span>
           </div>
           {result && (

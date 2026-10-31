@@ -1,4 +1,7 @@
 import type { CSSProperties, ReactNode, Ref } from 'react'
+import { ROLE_NAMES } from '../labels'
+import type { CardStatus, LogLine } from '../trace'
+import type { Role } from '../types'
 
 /** A closing cross for icon buttons, drawn to match the 1.5 px chevrons. */
 export function CloseIcon() {
@@ -8,20 +11,6 @@ export function CloseIcon() {
     </svg>
   )
 }
-
-export function PlaneIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"
-        fill="currentColor"
-      />
-    </svg>
-  )
-}
-import { ROLE_NAMES } from '../labels'
-import type { CardStatus, LogLine } from '../trace'
-import type { Role } from '../types'
 
 const STATUS_LABELS: Record<CardStatus, string> = {
   waiting: 'Waiting',
