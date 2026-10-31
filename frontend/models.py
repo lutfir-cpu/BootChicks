@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from bootchicks.capacity import AirportCapacity
+
 Role = Literal["ATC", "Pilot", "Ground"]
 Decision = Literal["ACCEPT", "REJECT", "COUNTER", "NEED_INFORMATION"]
 ROLES: tuple[Role, ...] = ("ATC", "Pilot", "Ground")
@@ -55,6 +57,7 @@ class Scenario(Model):
     gates: tuple[Gate, ...] = ()
     provenance: dict[str, str] = Field(default_factory=dict)
     flight_metadata: dict[str, str | int | float | None] = Field(default_factory=dict)
+    airport_capacity: AirportCapacity | None = None
 
     @model_validator(mode="after")
     def unique_resources(self):

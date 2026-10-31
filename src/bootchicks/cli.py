@@ -45,6 +45,12 @@ def main():
     run.add_argument("--output", type=Path)
     run.add_argument("--round-timeout", type=float, default=12)
     run.add_argument("--total-timeout", type=float, default=30)
+    run.add_argument("--capacity-version")
+    run.add_argument(
+        "--gate-occupancies",
+        type=Path,
+        help="JSON list of airport, gate_id, start_min and end_min relative to scenario start",
+    )
     export = commands.add_parser("export")
     export.add_argument("run_id")
     export.add_argument("--format", choices=["json", "jsonl"], default="json")
@@ -94,8 +100,17 @@ def main():
                 scenario_id=args.scenario,
                 round_timeout_seconds=args.round_timeout,
                 total_timeout_seconds=args.total_timeout,
+                capacity_version=args.capacity_version,
+                gate_occupancies=json.loads(args.gate_occupancies.read_text())
+                if args.gate_occupancies
+                else (),
             )
-            load_snapshot(args.scenario, trigger)
+            load_snapshot(
+                args.scenario,
+                trigger,
+                capacities=store.airport_capacities(request.capacity_version),
+                gate_occupancies=request.gate_occupancies,
+            )
             with store.process_lock():
                 store.recover_interrupted()
                 run_id, created = store.open_run(

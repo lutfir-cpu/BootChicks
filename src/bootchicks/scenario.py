@@ -5,12 +5,18 @@ from itertools import product
 from pathlib import Path
 
 from .ingestion import normalize
-from .schemas import Action, CandidatePlan, Snapshot, WorkflowInput, digest
+from .schemas import Action, CandidatePlan, RunRequest, Snapshot, WorkflowInput, digest
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 
 
-def load_snapshot(scenario_id: str, trigger: WorkflowInput | None = None) -> Snapshot:
+def load_snapshot(
+    scenario_id: str,
+    trigger: WorkflowInput | None = None,
+    *,
+    capacities=None,
+    gate_occupancies=(),
+) -> Snapshot:
     base = Snapshot.model_validate_json(
         (DATA_DIR / "scenarios/blueprint_v1.json").read_bytes()
     )
@@ -75,6 +81,53 @@ def load_snapshot(scenario_id: str, trigger: WorkflowInput | None = None) -> Sna
             ]
     elif scenario_id != "runway_closure_gate_conflict_v1":
         raise ValueError("UNKNOWN_SCENARIO")
+    if capacities is not None:
+        for airport in [payload["destination"], *payload["alternates"]]:
+            code = airport["iata_code"]
+            if code not in capacities:
+                raise ValueError(f"No challenge capacity data for {code}.")
+            airport["capacity"] = capacities[code].model_dump(mode="json")
+        payload["operational_provenance"]["airport_capacity"] = (
+            "Challenge-provided SYNTHETIC planning limits; only modeled runway operations are counted. "
+            "Named resources, closures, fuel, weather and crews remain scenario assumptions."
+        )
+    # Revalidate even when called directly, rather than trusting a prior request validation.
+    occupancies = RunRequest(gate_occupancies=gate_occupancies).gate_occupancies
+    airports = {
+        a["iata_code"]: a for a in [payload["destination"], *payload["alternates"]]
+    }
+    clock = datetime.fromisoformat(payload["clock"].replace("Z", "+00:00"))
+    for index, busy in enumerate(occupancies):
+        airport = airports.get(busy.airport)
+        if airport is None or busy.gate_id not in {g["id"] for g in airport["gates"]}:
+            raise ValueError(
+                f"Unknown gate {busy.airport}/{busy.gate_id} in this scenario."
+            )
+        payload["reservations"].append(
+            {
+                "resource": f"gate:{busy.airport}:{busy.gate_id}",
+                "interval": {
+                    "start": (clock + timedelta(minutes=busy.start_min)).isoformat(),
+                    "end": (clock + timedelta(minutes=busy.end_min)).isoformat(),
+                },
+                "flight_id": f"USER_GATE_{index}",
+                "wake_class": "M",
+            }
+        )
+    if capacities is not None or occupancies:
+        payload["environment_id"] = digest(
+            {
+                "base_environment": payload["environment_id"],
+                "capacity_rows": [a.get("capacity") for a in airports.values()],
+                "gate_occupancies": [
+                    busy.model_dump(mode="json") for busy in occupancies
+                ],
+            }
+        )[:24]
+    if occupancies:
+        payload["operational_provenance"]["gate_occupancies"] = (
+            "User-defined half-open intervals, minutes relative to scenario clock; saved as UTC reservations."
+        )
     return Snapshot.model_validate(payload)
 
 

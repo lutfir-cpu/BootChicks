@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from uuid import uuid4
 
 import pandas as pd
 import streamlit as st
@@ -11,11 +12,13 @@ from dotenv import load_dotenv
 from pydantic import ValidationError
 
 from agents import ClaudeAgents, SimulatedAgents
+from bootchicks.store import Store
 from csv_import import eligible_flights
 from engine import negotiate
 from models import ROLES, Scenario
 from prompts import DEFAULT_PROMPTS, resolve_prompts
 from samples import bundled_scenarios
+from web_inputs import scheduled_gates
 
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT.parent / ".env")
@@ -33,9 +36,28 @@ def parse_intervals(value):
         return []
     result = []
     for part in str(value).split(","):
-        start, finish = part.strip().split(":")
-        result.append({"start": int(start), "end": int(finish)})
+        try:
+            start, finish = part.strip().split(":")
+            result.append({"start": int(start), "end": int(finish)})
+        except ValueError:
+            raise ValueError(
+                f"'{part.strip()}' is not a start:end interval of whole minutes"
+            ) from None
     return result
+
+
+def input_error(exc):
+    """One actionable sentence for invalid inputs, without validation-library jargon."""
+    if isinstance(exc, ValidationError):
+        error = exc.errors()[0]
+        message = error["msg"].removeprefix("Value error, ").rstrip(".")
+        field = ".".join(str(part) for part in error["loc"])
+        return (
+            message
+            if error["type"] == "value_error" or not field
+            else f"{field}: {message}"
+        )
+    return str(exc).rstrip(".")
 
 
 def reset_prompt(role):
@@ -45,6 +67,21 @@ def reset_prompt(role):
 @st.cache_data(show_spinner=False)
 def import_rows(payload):
     return eligible_flights(payload)
+
+
+@st.cache_resource
+def reference_store(database):
+    return Store(database)
+
+
+def add_busy_period(key, gate):
+    st.session_state[key].append(
+        {"uid": uuid4().hex, "gate_id": gate, "start_min": 0, "end_min": 30}
+    )
+
+
+def remove_busy_period(key, uid):
+    st.session_state[key] = [row for row in st.session_state[key] if row["uid"] != uid]
 
 
 st.title("Arrival desk")
@@ -139,6 +176,68 @@ with st.expander("Import flight data or a saved scenario"):
             )
             st.stop()
 
+# Share the backend's database; relative paths resolve from the repository root like the CLI's.
+store = reference_store(
+    str(ROOT.parent / os.getenv("BOOTCHICKS_DATABASE", "data/runs/bootchicks.sqlite"))
+)
+capacities = store.airport_capacities()
+st.subheader("Airport capacity")
+default_airport = (
+    template.airport_capacity.iata_code
+    if template.airport_capacity
+    else str(template.flight_metadata.get("DESTINATION") or "DFW")
+)
+if default_airport not in capacities:
+    default_airport = "DFW"
+template_key = hashlib.sha256(template.model_dump_json().encode()).hexdigest()[:12]
+if st.session_state.get("capacity_template") != template_key:
+    st.session_state["capacity_airport"] = default_airport
+    st.session_state["capacity_template"] = template_key
+airport = st.selectbox(
+    "Airport",
+    list(capacities),
+    key="capacity_airport",
+    format_func=lambda code: f"{code} - {capacities[code].airport}",
+)
+capacity = capacities[airport]
+st.caption(
+    "Challenge-provided synthetic planning limits. Fuel, closures, named resources and bookings remain scenario assumptions."
+)
+st.dataframe(
+    pd.DataFrame(
+        {
+            "Limit": [
+                "Active runways",
+                "Total gates",
+                "Runway operations per hour",
+                "Minimum turnaround (min)",
+                "Spare gate allocations",
+            ],
+            "Provided value": [
+                capacity.active_runways,
+                capacity.gates,
+                capacity.max_runway_ops_per_hour,
+                capacity.min_turnaround_min,
+                capacity.spare_gates_at_any_time,
+            ],
+        }
+    ),
+    hide_index=True,
+    # A short two-column lookup reads best with each value next to its label.
+    width="content",
+)
+st.caption(
+    "Capacity checks count the traffic configured in this replay. Gate changes use the spare-gate allowance; individual busy periods still determine availability."
+)
+original_capacity = template.airport_capacity
+initial_turnaround = (
+    template.turnaround_min
+    if original_capacity and original_capacity.iata_code == airport
+    else max(template.turnaround_min, capacity.min_turnaround_min)
+)
+template = template.model_copy(
+    update={"airport_capacity": capacity, "turnaround_min": initial_turnaround}
+)
 prefix = hashlib.sha256(template.model_dump_json().encode()).hexdigest()[:12]
 st.subheader("Scenario assumptions")
 st.caption(
@@ -205,7 +304,6 @@ gate_rows = [
     {
         "id": g.id,
         "compatible": g.compatible,
-        "occupied": intervals_text(g.occupied),
         "handling_available": g.handling_available,
     }
     for g in template.gates
@@ -237,9 +335,7 @@ edited_runways = st.data_editor(
 )
 st.markdown("**Gates and ground handling - assumed**")
 edited_gates = st.data_editor(
-    pd.DataFrame(
-        gate_rows, columns=["id", "compatible", "occupied", "handling_available"]
-    ),
+    pd.DataFrame(gate_rows, columns=["id", "compatible", "handling_available"]),
     hide_index=True,
     num_rows="dynamic",
     width="stretch",
@@ -247,9 +343,71 @@ edited_gates = st.data_editor(
     column_config={
         "id": "Gate",
         "compatible": "Aircraft compatible",
-        "occupied": "Occupied (start:end)",
         "handling_available": "Handling available",
     },
+)
+st.markdown("**Gate busy periods**")
+st.caption(
+    "Times are minutes after replay start. A period ending at minute 28 allows gate-in at minute 28. Remove every period to leave all configured gates free."
+)
+booking_key = f"{prefix}_bookings"
+if booking_key not in st.session_state:
+    st.session_state[booking_key] = [
+        {
+            "uid": f"initial_{index}_{period}",
+            "gate_id": gate.id,
+            "start_min": interval.start,
+            "end_min": interval.end,
+        }
+        for index, gate in enumerate(template.gates)
+        for period, interval in enumerate(gate.occupied)
+    ]
+gate_ids = [
+    str(row["id"]).strip() for row in edited_gates.to_dict("records") if row.get("id")
+]
+busy_rows = []
+for row in st.session_state[booking_key]:
+    uid = f"{prefix}_{row['uid']}"
+    gate_col, start_col, end_col, remove_col = st.columns(
+        [2, 1.4, 1.4, 1], vertical_alignment="bottom"
+    )
+    options = list(dict.fromkeys([*gate_ids, row["gate_id"]]))
+    with gate_col:
+        chosen_gate = st.selectbox(
+            "Gate", options, index=options.index(row["gate_id"]), key=f"{uid}_gate"
+        )
+    with start_col:
+        start = st.number_input(
+            "Occupied from (min)",
+            min_value=0,
+            max_value=525600,
+            value=int(row["start_min"]),
+            step=1,
+            key=f"{uid}_start",
+        )
+    with end_col:
+        end = st.number_input(
+            "Occupied until (min)",
+            min_value=0,
+            max_value=525600,
+            value=int(row["end_min"]),
+            step=1,
+            key=f"{uid}_end",
+        )
+    with remove_col:
+        st.button(
+            "Remove",
+            key=f"{uid}_remove",
+            on_click=remove_busy_period,
+            args=(booking_key, row["uid"]),
+        )
+    busy_rows.append({"gate_id": chosen_gate, "start_min": start, "end_min": end})
+st.button(
+    "Add busy period",
+    key="add_busy_period",
+    disabled=not gate_ids,
+    on_click=add_busy_period,
+    args=(booking_key, gate_ids[len(busy_rows) % len(gate_ids)] if gate_ids else ""),
 )
 data["original_gate"] = st.text_input(
     "Original gate", template.original_gate, key=f"{prefix}_original"
@@ -265,21 +423,19 @@ try:
         }
         for row in edited_runways.to_dict("records")
     ]
-    data["gates"] = [
-        {**row, "occupied": parse_intervals(row["occupied"])}
-        for row in edited_gates.to_dict("records")
-    ]
+    data["gates"] = scheduled_gates(edited_gates.to_dict("records"), busy_rows, airport)
     if not data["flight_id"].strip():
         raise ValueError("Flight identifier is required.")
     # All operational controls are editable assumptions, even when loaded from a saved replay.
     data["provenance"].update(
         {"operational_inputs": "User-editable simulation assumptions"}
     )
-    scenario = Scenario.model_validate(data)
-except (ValueError, TypeError):
-    st.error(
-        "Check scenario values: use integer start:end intervals, positive durations and unique nonempty resource IDs."
+    data["provenance"]["airport_capacity"] = (
+        f"Challenge-provided synthetic limits: {capacity.source_version}; sha256:{capacity.source_sha256}"
     )
+    scenario = Scenario.model_validate(data)
+except (ValueError, TypeError) as exc:
+    st.error(f"Check scenario values: {input_error(exc)}.")
 
 with st.expander("Input sources and calculated fuel budget"):
     st.json(data["provenance"])
@@ -387,7 +543,7 @@ if result:
         )
     st.write(result.reason)
     st.caption(
-        f"{result.mode} | {result.round_count} rounds | {result.agent_message_count} validated agent messages | {result.api_request_count} API requests"
+        f"{result.mode} | {result.round_count} {'round' if result.round_count == 1 else 'rounds'} | {result.agent_message_count} validated agent messages | {result.api_request_count} API requests"
     )
     edited_roles = [
         role

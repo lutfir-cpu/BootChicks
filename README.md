@@ -118,6 +118,35 @@ Its fixed ordering is airborne fuel, touchdown, missed connections, overtime and
 Resource commits still require revalidation.
 No feasible action means escalation and a human-review flag, never an invented hold or diversion.
 
+## Airport capacity and gate busy periods
+
+`data/constraints/airport_capacity.csv` is the challenge-supplied capacity sheet, kept byte for byte as provided.
+It lists 322 airports and is labelled as synthetic planning limits, not real airport data.
+Each database imports it into an `airport_capacity` table, keyed by a version derived from the file's SHA-256 hash.
+Runs copy the destination and alternate rows into their saved snapshot, so a later change to the CSV does not change an earlier run's evidence.
+Pass `--capacity-version` (or `capacity_version` in the API) to pin a previously imported version.
+
+When an airport row is present, Python adds these checks, each citing the row's version and hash:
+
+- modeled runways and gates do not exceed the airport's totals;
+- turnaround meets the minimum turnaround;
+- modeled runway operations in any affected rolling hour stay within the hourly cap;
+- a reassigned or diverted gate fits within the concurrent spare-gate allowance.
+
+The CSV gives counts, not named resources.
+Only traffic configured in the scenario is counted, and runway closures, fuel, individual gate bookings and crews remain scenario assumptions.
+
+Gate busy periods block named gates for half-open minute intervals relative to the scenario clock:
+
+```sh
+echo '[{"airport": "DFW", "gate_id": "B2", "start_min": 0, "end_min": 180}]' > busy.json
+bootchicks run --mode stub --gate-occupancies busy.json --database data/runs/busy.sqlite
+```
+
+They are saved as UTC reservations in the snapshot.
+Unknown gates, intervals that do not end after they start and overlapping periods on the same gate are rejected before any agent call.
+Different busy periods or capacity versions produce a separate simulation environment; identical ones reuse it.
+
 ## Local API
 
 ```sh
@@ -129,7 +158,8 @@ The server binds only to localhost.
 This MVP has no authentication or deployment scope.
 
 - `POST /runs` requires `Idempotency-Key`, accepts either a complete `WorkflowInput` trigger or a `RunRequest` wrapper and returns HTTP 202 with a run ID.
-The wrapper can select a labelled synthetic scenario or contain `trigger`, `mode` and deadline settings.
+The wrapper can select a labelled synthetic scenario or contain `trigger`, `mode`, deadline settings, `capacity_version` and `gate_occupancies`.
+- `GET /airport-capacities` lists the imported capacity rows; `GET /airport-capacities/{iata_code}` returns one airport or 404.
 - `GET /runs/{id}` returns queued/running/terminal state and the saved result.
 - `GET /runs/{id}/events` returns ordered events; `?format=jsonl` exports JSONL.
 - Identical same-key retries return the same run; a different payload with that key returns HTTP 409.
