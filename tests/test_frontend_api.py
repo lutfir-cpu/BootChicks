@@ -36,10 +36,19 @@ def test_options_describe_scenarios_gates_prompts_and_live_availability(
     ]
     default = options["scenarios"][0]
     assert default["preferred_gate"] == "A1"
-    assert default["airports"] == [
-        {"iata_code": "DFW", "kind": "destination", "gates": ["A1", "B2", "C3", "D4"]},
-        {"iata_code": "DAL", "kind": "alternate", "gates": ["A1", "B2", "C3", "D4"]},
+    assert [(a["iata_code"], a["kind"], a["gates"]) for a in default["airports"]] == [
+        ("DFW", "destination", ["A1", "B2", "C3", "D4"]),
+        ("DAL", "alternate", ["A1", "B2", "C3", "D4"]),
     ]
+    assert default["window_min"] == 120
+    assert default["aircraft"]["fuel_kg"] == 6000
+    assert default["airports"][0]["runways"] == [
+        {"id": "R1", "closed": [{"start_min": 0, "end_min": 22}]},
+        {"id": "R2", "closed": [{"start_min": 0, "end_min": 120}]},
+    ]
+    assert default["airports"][0]["crews"] == 3
+    fuel = next(s for s in options["scenarios"] if s["id"] == "insufficient_fuel")
+    assert fuel["aircraft"]["fuel_kg"] == 4300
     assert options["live_available"] is False
     assert options["default_prompts"] == DEFAULT_PROMPTS
     assert set(options["default_prompts"]) == set(ROLES)

@@ -135,10 +135,10 @@ The deviations fall into four groups:
   The blueprint asks for references but does not make them mandatory per vote.
 - **Agents author the hard/soft classification.**
   Constraint IDs are checked against the server's list, but the agent's `classification` is not compared with the server's own classification.
-- **The provider timeout is decoupled from the configured round budget.**
-  `AsyncAnthropic(timeout=12, max_retries=0)` is hardcoded (`providers.py:33`).
-  A `--round-timeout` above 12 s cannot extend a live call.
-  The asyncio round deadline still enforces the configured limit.
+- **Live runs from the web app use longer budgets than the blueprint's starting budget.**
+  A real round 1 Claude call took about 12.4 s, just over the 12 s round budget, so every agent timed out.
+  The web app sends 60 s per round and 150 s in total for Claude runs; the CLI keeps 12 s and 30 s by default.
+  The provider's own HTTP timeout is 120 s, the largest allowed round budget, so the asyncio round deadline alone enforces the configured limit.
 - **There is no named `MAX_NEGOTIATION_ROUNDS` constant (section 9).**
   The limit is structural, and `RunResult` rejects `rounds_used > 2`.
 - **The stale-snapshot reason is merged.**
@@ -178,7 +178,7 @@ The deviations fall into four groups:
 | User-defined gate occupancies | `RunRequest.gate_occupancies` and `--gate-occupancies` inject extra gate reservations relative to the scenario clock. |
 | Extra API endpoints and fields | `GET /airport-capacities`, `GET /airport-capacities/{iata_code}` and `GET /options`. `POST /runs` also accepts a `RunRequest` wrapper as well as a bare `WorkflowInput`. `RunRequest.environment` starts a run in its own simulated environment so earlier commits do not block it. |
 | Synthetic failure scenarios | `insufficient_fuel`, `no_gate` and `diversion` are code-level overrides in `scenario.py:70-83`, not separate versioned scenario files. |
-| Editable prompts | `RunRequest.role_prompts` overrides the live system prompt per role. The prompts used are recorded in `ROUND_INPUT`, and agent messages carry `blueprint-agents-v2+custom-<hash>` when edited; defaults are `blueprint-agents-v2`. |
+| Editable prompts | `RunRequest.role_prompts` overrides the live system prompt per role. The prompts used are recorded in `ROUND_INPUT`, and agent messages carry `blueprint-agents-v3+custom-<hash>` when edited; defaults are `blueprint-agents-v3`. |
 
 ## 4. Structural and naming differences
 

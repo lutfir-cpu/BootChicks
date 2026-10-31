@@ -9,13 +9,14 @@ from .schemas import (
     ROLES,
     ConstraintReference,
     Proposal,
+    ProtocolViolation,
     RoundOneResponse,
     RoundTwoResponse,
     Vote,
     digest,
 )
 
-PROMPT_VERSION = "blueprint-agents-v2"
+PROMPT_VERSION = "blueprint-agents-v3"
 GUIDANCE = {
     "ATC": "Protect separation, runway/taxi access and capacity. Prefer early touchdown and efficient taxi paths.",
     "PILOT": "Protect aircraft limits and both fuel floors. Prefer less airborne fuel burn and retained connections.",
@@ -28,7 +29,9 @@ SHARED_RULES = (
     "Round 1: propose up to three distinct complete LAND actions, preferred/compromise/concession, "
     "with requested concessions and constraint references. Concessions affect preferences only.\n"
     "Round 2: ACCEPT or REJECT every published feasible candidate with its exact id/hash; "
-    "use unique ranks 1 through N, cite proposal message ids, and explain specific concessions.\n"
+    "use unique ranks 1 through N, and explain specific concessions.\n"
+    "In every vote, proposal_references must list proposal_board event_id values, "
+    "including at least one message from another role.\n"
     "You may accept multiple feasible options even if another is preferred. Never invent unanimous acceptance.\n"
     "You cannot edit candidates in round 2. Give concise decision rationales, not hidden chain of thought.\n"
     "Echo only your assigned sender and snapshot version."
@@ -59,7 +62,8 @@ class ClaudeProvider:
         from anthropic import AsyncAnthropic
 
         self.model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5-5")
-        self.client = client or AsyncAnthropic(timeout=12, max_retries=0)
+        # The asyncio round deadline enforces the configured budget; the client must not cut a call off earlier.
+        self.client = client or AsyncAnthropic(timeout=120, max_retries=0)
         self.system_prompts = resolve_prompts(system_prompts)
         self.prompt_version = prompt_identity(self.system_prompts)
 
@@ -79,7 +83,7 @@ class ClaudeProvider:
             output_format=response_schema,
         )
         if response.parsed_output is None:
-            raise ValueError("NO_STRUCTURED_RESPONSE")
+            raise ProtocolViolation("NO_STRUCTURED_RESPONSE")
         return response.parsed_output
 
     async def close(self):

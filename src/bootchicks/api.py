@@ -9,6 +9,7 @@ from typing import Annotated, Literal
 from fastapi import FastAPI, Header, HTTPException, Response
 from fastapi.staticfiles import StaticFiles
 
+from .decisions import decision_log
 from .negotiation import execute
 from .providers import DEFAULT_PROMPTS, PROMPT_VERSION
 from .scenario import DATA_DIR, SCENARIOS, load_snapshot, request_snapshot
@@ -18,21 +19,52 @@ from .store import IdempotencyConflict, Store
 SAMPLE_TRIGGER = DATA_DIR / "fixtures/real_trigger.json"
 
 
+def minutes_after(clock, moment):
+    return round((moment - clock).total_seconds() / 60)
+
+
 def scenario_options():
-    """Describe each scenario's airports and gates so clients can offer valid busy periods."""
+    """Describe each scenario's simulated state so clients can show it and offer valid busy periods.
+
+    Times are minutes after the scenario clock, so they also hold for a real flight trigger,
+    which shifts every timestamp of the scenario to that flight's arrival.
+    """
     options = []
     for scenario_id, text in SCENARIOS.items():
         snapshot = load_snapshot(scenario_id)
+        aircraft = snapshot.aircraft
         options.append(
             {
                 "id": scenario_id,
                 **text,
                 "preferred_gate": snapshot.preferred_gate,
+                "window_min": minutes_after(snapshot.clock, snapshot.valid_until),
+                "aircraft": {
+                    "type_label": aircraft.type_label,
+                    "fuel_kg": aircraft.fuel_kg,
+                    "protected_landing_kg": aircraft.protected_landing_kg,
+                },
                 "airports": [
                     {
                         "iata_code": airport.iata_code,
                         "kind": kind,
                         "gates": [gate.id for gate in airport.gates],
+                        "runways": [
+                            {
+                                "id": runway.id,
+                                "closed": [
+                                    {
+                                        "start_min": minutes_after(
+                                            snapshot.clock, w.start
+                                        ),
+                                        "end_min": minutes_after(snapshot.clock, w.end),
+                                    }
+                                    for w in runway.closed
+                                ],
+                            }
+                            for runway in airport.runways
+                        ],
+                        "crews": len(airport.crews),
                     }
                     for kind, airport in [
                         ("destination", snapshot.destination),
@@ -122,6 +154,17 @@ def create_app(database=None, provider_factory=None, frontend_dir=None):
             return app.state.store.run(run_id)
         except KeyError as exc:
             raise HTTPException(404, "Run not found") from exc
+
+    @app.get("/runs/{run_id}/decisions")
+    async def read_decisions(run_id: str):
+        """What each agent was given, decided and why, then what Python decided; also while the run is live."""
+        try:
+            # Read the status first, so a finished run always comes with its complete trail.
+            state = app.state.store.run(run_id)
+            events = app.state.store.events(run_id)
+        except KeyError as exc:
+            raise HTTPException(404, "Run not found") from exc
+        return decision_log(state, events)
 
     @app.get("/options")
     async def read_options():

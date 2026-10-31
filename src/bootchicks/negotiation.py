@@ -11,6 +11,7 @@ from .scenario import actions, candidate, catalogue, request_snapshot
 from .schemas import (
     ROLES,
     ConsensusCertificate,
+    ProtocolViolation,
     Provenance,
     RoundOneResponse,
     RoundTwoResponse,
@@ -72,18 +73,18 @@ def validate_reply(role, number, response, snapshot, context):
         response.sender != role
         or response.snapshot_version != snapshot.snapshot_version
     ):
-        raise ValueError("WRONG_SENDER_OR_SNAPSHOT")
+        raise ProtocolViolation("WRONG_SENDER_OR_SNAPSHOT")
     if number == 1:
         allowed = {digest(a) for a in actions(snapshot)}
         if any(digest(p.action) not in allowed for p in response.proposals):
-            raise ValueError("UNKNOWN_ACTION_OR_RESOURCE")
+            raise ProtocolViolation("UNKNOWN_ACTION_OR_RESOURCE")
         if len({p.label for p in response.proposals}) != len(response.proposals):
-            raise ValueError("DUPLICATE_PROPOSAL_LABEL")
+            raise ProtocolViolation("DUPLICATE_PROPOSAL_LABEL")
         if any(
             c.constraint_id not in context["allowed_constraint_ids"]
             for c in response.constraint_references
         ):
-            raise ValueError("UNKNOWN_CONSTRAINT_REFERENCE")
+            raise ProtocolViolation("UNKNOWN_CONSTRAINT_REFERENCE")
     else:
         expected_hashes = {
             e["candidate"]["candidate_id"]: e["candidate"]["plan_hash"]
@@ -92,11 +93,11 @@ def validate_reply(role, number, response, snapshot, context):
         if len(response.votes) != len(expected_hashes) or {
             v.candidate_id for v in response.votes
         } != set(expected_hashes):
-            raise ValueError("INCOMPLETE_OR_DUPLICATE_VOTE_SET")
+            raise ProtocolViolation("INCOMPLETE_OR_DUPLICATE_VOTE_SET")
         if {v.preference_rank for v in response.votes} != set(
             range(1, len(response.votes) + 1)
         ):
-            raise ValueError("INVALID_OR_DUPLICATE_RANKS")
+            raise ProtocolViolation("INVALID_OR_DUPLICATE_RANKS")
         message_ids = {m["event_id"] for m in context["proposal_board"]}
         other_ids = {
             m["event_id"]
@@ -105,12 +106,12 @@ def validate_reply(role, number, response, snapshot, context):
         }
         for vote in response.votes:
             if expected_hashes.get(vote.candidate_id) != vote.plan_hash:
-                raise ValueError("UNKNOWN_PLAN_HASH")
+                raise ProtocolViolation("UNKNOWN_PLAN_HASH")
             if (
                 not set(vote.proposal_references) <= message_ids
                 or not set(vote.proposal_references) & other_ids
             ):
-                raise ValueError("INVALID_CROSS_DOMAIN_REFERENCE")
+                raise ProtocolViolation("INVALID_CROSS_DOMAIN_REFERENCE")
     return response
 
 
@@ -159,11 +160,10 @@ async def role_round(
         try:
             reply = task.result()
         except Exception as exc:  # noqa: BLE001 - provider boundary, never serialize raw exceptions.
-            store.append(
-                run_id,
-                "AGENT_ABSENT",
-                {"round": number, "sender": role, "reason": type(exc).__name__},
-            )
+            absent = {"round": number, "sender": role, "reason": type(exc).__name__}
+            if isinstance(exc, ProtocolViolation):
+                absent["rule"] = str(exc)
+            store.append(run_id, "AGENT_ABSENT", absent)
             failed = True
             continue
         counts.responses += 1

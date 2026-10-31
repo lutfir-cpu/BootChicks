@@ -177,7 +177,7 @@ This MVP has no authentication or deployment scope.
 The wrapper can select a labelled synthetic scenario or contain `trigger`, `mode`, deadline settings, `capacity_version`, `gate_occupancies`, `environment` and `role_prompts`.
 - `environment` (letters, digits, `-` and `_`) starts the run in its own simulated environment, so earlier commits do not block it; the web app sends a new one per run.
 - `role_prompts` replaces the system prompt of any of `ATC`, `PILOT` and `GROUND` for live Claude runs (nonblank, at most 8,000 characters).
-The prompts used are recorded in the round 1 `ROUND_INPUT` event, and agent messages carry a `prompt_version` such as `blueprint-agents-v2+custom-<hash>` when edited.
+The prompts used are recorded in the round 1 `ROUND_INPUT` event, and agent messages carry a `prompt_version` such as `blueprint-agents-v3+custom-<hash>` when edited.
 Fixture and replay runs ignore them.
 - `GET /options` lists scenarios with their airports and gates, the default prompts, whether live mode has an API key and the verified real-flight trigger.
 - `GET /airport-capacities` lists the imported capacity rows; `GET /airport-capacities/{iata_code}` returns one airport or 404.

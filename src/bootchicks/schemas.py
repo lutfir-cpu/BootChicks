@@ -31,6 +31,10 @@ def digest(value) -> str:
     ).hexdigest()
 
 
+class ProtocolViolation(ValueError):
+    """An agent reply broke a message rule; the code names the rule and is safe to record."""
+
+
 class Model(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
