@@ -1,5 +1,11 @@
 # BootChicks
 
+## React dashboard
+
+The new single-page AeroResolve dashboard lives in [`web/`](web/).
+Run `npm install` and `npm run dev` there to open the local simulated three-turn workflow.
+See [`web/README.md`](web/README.md) for its service boundary and backend integration notes.
+
 A reproducible, two-round airport-disruption negotiation backend.
 Independent ATC, Pilot and Ground agents propose complete actions, review a shared proposal board and explicitly vote on exact candidate hashes.
 Python enforces hard constraints; SQLite records evidence and atomically reserves simulated resources.

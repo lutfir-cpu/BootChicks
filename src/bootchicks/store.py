@@ -1,12 +1,18 @@
 """SQLite audit log, idempotent runs and atomic simulator resource commits."""
 
-import fcntl
+import errno
 import json
+import os
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
 
 from .capacity import DEFAULT_CAPACITY_CSV, AirportCapacity, read_capacities
 from .constraints import evaluate
@@ -85,17 +91,31 @@ class Store:
     @contextmanager
     def process_lock(self):
         """One local runtime owns restart recovery; SQL transactions still protect every commit."""
-        with open(self.path + ".lock", "a") as lock:
+        with open(self.path + ".lock", "a+b") as lock:
+            if os.name == "nt":
+                if lock.tell() == 0:
+                    lock.write(b"\0")
+                    lock.flush()
+                lock.seek(0)
             try:
-                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError as exc:
+                if os.name == "nt":
+                    msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError as exc:
+                if exc.errno not in (errno.EACCES, errno.EAGAIN):
+                    raise
                 raise RuntimeError(
                     "This database already has a running worker. Use its API or a different database."
                 ) from exc
             try:
                 yield
             finally:
-                fcntl.flock(lock, fcntl.LOCK_UN)
+                if os.name == "nt":
+                    lock.seek(0)
+                    msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    fcntl.flock(lock, fcntl.LOCK_UN)
 
     def open_run(self, key, request):
         if not key or len(key) > 200:
