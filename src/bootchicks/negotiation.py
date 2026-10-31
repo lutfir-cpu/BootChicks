@@ -201,6 +201,9 @@ def role_contexts(snapshot):
         "destination": airport.iata_code,
         "policy": snapshot.policy.model_dump(mode="json"),
         "operational_provenance": snapshot.operational_provenance,
+        "airport_capacity": airport.capacity.model_dump(mode="json")
+        if airport.capacity
+        else None,
     }
     domain = {
         "ATC": {
@@ -260,7 +263,14 @@ async def execute(store, run_id, request: RunRequest, provider=None) -> RunResul
     scenario_id = (
         request.trigger.scenario_id if request.trigger else request.scenario_id
     )
-    snapshot = store.load_or_seed(load_snapshot(scenario_id, request.trigger))
+    snapshot = store.load_or_seed(
+        load_snapshot(
+            scenario_id,
+            request.trigger,
+            capacities=store.airport_capacities(request.capacity_version),
+            gate_occupancies=request.gate_occupancies,
+        )
+    )
     baseline = None
     store.append(
         run_id,

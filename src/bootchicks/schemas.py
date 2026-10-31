@@ -14,6 +14,8 @@ from pydantic import (
     model_validator,
 )
 
+from .capacity import AirportCapacity
+
 Role = Literal["ATC", "PILOT", "GROUND"]
 ROLES: tuple[Role, ...] = ("ATC", "PILOT", "GROUND")
 Mode = Literal["stub", "live", "recorded_replay", "fallback"]
@@ -203,6 +205,7 @@ class Crew(Model):
 
 class Airport(Model):
     iata_code: str
+    capacity: AirportCapacity | None = None
     timezone: str
     lookup: RawAirport
     slots: tuple[AwareDatetime, ...] = Field(min_length=1, max_length=20)
@@ -554,6 +557,19 @@ class WorkflowInput(Model):
         return self
 
 
+class GateOccupancy(Model):
+    airport: str = Field(pattern=r"^[A-Z]{3}$")
+    gate_id: str = Field(min_length=1)
+    start_min: int = Field(ge=0, le=525600, strict=True)
+    end_min: int = Field(gt=0, le=525600, strict=True)
+
+    @model_validator(mode="after")
+    def ordered(self):
+        if self.end_min <= self.start_min:
+            raise ValueError("Gate occupancy must end after it starts.")
+        return self
+
+
 class RunRequest(Model):
     trigger: WorkflowInput | None = None
     scenario_id: Literal[
@@ -563,3 +579,21 @@ class RunRequest(Model):
     seed: int = 42
     round_timeout_seconds: float = Field(default=12, gt=0, le=120)
     total_timeout_seconds: float = Field(default=30, gt=0, le=300)
+    capacity_version: str | None = None
+    gate_occupancies: tuple[GateOccupancy, ...] = Field(default=(), max_length=500)
+
+    @field_validator("gate_occupancies")
+    @classmethod
+    def gate_intervals(cls, values):
+        ordered = tuple(
+            sorted(values, key=lambda v: (v.airport, v.gate_id, v.start_min, v.end_min))
+        )
+        for previous, current in zip(ordered, ordered[1:]):
+            if (previous.airport, previous.gate_id) == (
+                current.airport,
+                current.gate_id,
+            ) and current.start_min < previous.end_min:
+                raise ValueError(
+                    "Gate occupancy intervals for the same gate must not overlap."
+                )
+        return ordered

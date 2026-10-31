@@ -70,6 +70,8 @@ def create_app(database=None, provider_factory=None):
             load_snapshot(
                 request.trigger.scenario_id if request.trigger else request.scenario_id,
                 request.trigger,
+                capacities=app.state.store.airport_capacities(request.capacity_version),
+                gate_occupancies=request.gate_occupancies,
             )
             run_id, created = app.state.store.open_run(idempotency_key, request)
         except IdempotencyConflict as exc:
@@ -91,6 +93,17 @@ def create_app(database=None, provider_factory=None):
             return app.state.store.run(run_id)
         except KeyError as exc:
             raise HTTPException(404, "Run not found") from exc
+
+    @app.get("/airport-capacities")
+    async def read_capacities():
+        return list(app.state.store.airport_capacities().values())
+
+    @app.get("/airport-capacities/{iata_code}")
+    async def read_capacity(iata_code: str):
+        capacity = app.state.store.airport_capacities().get(iata_code.upper())
+        if capacity is None:
+            raise HTTPException(404, "Airport capacity not found")
+        return capacity
 
     @app.get("/runs/{run_id}/events")
     async def read_events(run_id: str, format: Literal["json", "jsonl"] = "json"):

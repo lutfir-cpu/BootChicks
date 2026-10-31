@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from .capacity import DEFAULT_CAPACITY_CSV, AirportCapacity, read_capacities
 from .constraints import evaluate
 from .schemas import AuditEvent, RunResult, Snapshot, digest
 
@@ -38,7 +39,39 @@ class Store:
                     environment_id TEXT PRIMARY KEY, base_hash TEXT NOT NULL,
                     snapshot_json TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS airport_capacity (
+                    source_version TEXT NOT NULL, iata_code TEXT NOT NULL,
+                    row_json TEXT NOT NULL,
+                    PRIMARY KEY(source_version, iata_code)
+                );
             """)
+        self.capacity_version = self.import_airport_capacities()
+
+    def import_airport_capacities(self, path=DEFAULT_CAPACITY_CSV):
+        rows = read_capacities(path)
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.executemany(
+                "INSERT OR IGNORE INTO airport_capacity VALUES (?,?,?)",
+                [
+                    (row.source_version, row.iata_code, row.model_dump_json())
+                    for row in rows
+                ],
+            )
+            db.commit()
+        return rows[0].source_version
+
+    def airport_capacities(self, version=None):
+        version = version or self.capacity_version
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT row_json FROM airport_capacity WHERE source_version=? ORDER BY iata_code",
+                (version,),
+            ).fetchall()
+        if not rows:
+            raise ValueError("Unknown airport capacity dataset version.")
+        parsed = [AirportCapacity.model_validate_json(row[0]) for row in rows]
+        return {row.iata_code: row for row in parsed}
 
     @contextmanager
     def connect(self):

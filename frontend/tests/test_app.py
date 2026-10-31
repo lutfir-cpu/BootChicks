@@ -37,7 +37,7 @@ def test_web_replay_and_rerun_does_not_call_agents_again(monkeypatch):
 def test_failure_scenarios_through_interface():
     app = AppTest.from_file(str(APP)).run(timeout=20)
     for name in ("Insufficient fuel", "No compatible gate"):
-        app.selectbox[0].select(name).run()
+        app.selectbox(key="scenario_choice").select(name).run()
         app.button(key="run").click().run(timeout=20)
         assert not app.exception
         assert app.session_state["result"].status == "No feasible plan"

@@ -55,6 +55,15 @@ Intervals are half-open `[start, end)` and all times are integer minutes relativ
 A background runway reservation's start is its operation start for the configured start-to-start separation check.
 
 The three bundled JSON scenarios are in `data/`.
+
+**Airport capacity** shows the challenge-supplied synthetic limits for the selected airport, read from the same SQLite table as the backend (see the repository README).
+The app uses `BOOTCHICKS_DATABASE`, resolved from the repository root, or `data/runs/bootchicks.sqlite` there.
+Choosing an airport raises the default turnaround to that airport's minimum if needed.
+Runs then also check modeled runway and gate totals, minimum turnaround, rolling-hour runway operations and the spare-gate allowance for gate changes.
+
+**Gate busy periods** replace the old `start:end` text field for gates.
+Each row picks a configured gate and an occupied-from and occupied-until minute; a period ending at minute 28 allows gate-in at minute 28.
+Unknown gates, periods that do not end after they start and overlapping periods on the same gate show an error naming the row, and block the run.
 All operational values are assumed.
 A CSV provides only historical metadata and delay categories.
 Eligibility is strictly `WEATHER_DELAY > 15` or `LATE_AIRCRAFT_DELAY > 20`; header casing, common 2015 flight columns and BTS camel-case delay fields are supported.
@@ -76,7 +85,7 @@ Taxi duration is fixed across all gates/runways in v1.
 This is a simplified fuel model, not an operational flight-planning calculation.
 Missing fuel values can be represented by JSON `null` or cleared numeric inputs; no agreement is possible until mandatory inputs are present.
 
-Mandatory checks cover runway closure/occupancy, a configurable start-to-start separation gap, fuel, gate compatibility and full gate occupancy, static handling availability, derived timings and state versions.
+Mandatory checks cover airport capacity limits, runway closure/occupancy, a configurable start-to-start separation gap, fuel, gate compatibility and full gate occupancy, static handling availability, derived timings and state versions.
 Aircraft/runway performance suitability, taxi-route availability, detailed staffing schedules, weather legality and actual wake categories are assumed, not validated.
 There is no diversion or emergency-handling model.
 A failure means no feasible option **within the configured replay assumptions and the next 60 minutes**, not that no real-world safe action exists.

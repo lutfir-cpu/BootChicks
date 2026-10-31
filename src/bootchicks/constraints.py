@@ -2,6 +2,7 @@
 
 from datetime import timedelta
 
+from .capacity import rolling_operations
 from .scenario import candidate
 from .schemas import (
     CandidateEvaluation,
@@ -42,7 +43,7 @@ def peak(interval: Window, reservations) -> int:
 def evaluate(s: Snapshot, p: CandidatePlan) -> CandidateEvaluation:
     checks: list[CheckResult] = []
 
-    def add(key, domain, ok, measured, bound, unit="boolean", margin=None):
+    def add(key, domain, ok, measured, bound, unit="boolean", margin=None, source=None):
         checks.append(
             CheckResult(
                 constraint_id=key,
@@ -52,7 +53,8 @@ def evaluate(s: Snapshot, p: CandidatePlan) -> CandidateEvaluation:
                 bound=bound,
                 unit=unit,
                 margin=margin,
-                source_reference=f"{s.profile_version}/{s.policy.version}/{key}; mock_fixture; {s.snapshot_version}",
+                source_reference=source
+                or f"{s.profile_version}/{s.policy.version}/{key}; mock_fixture; {s.snapshot_version}",
             )
         )
 
@@ -199,6 +201,64 @@ def evaluate(s: Snapshot, p: CandidatePlan) -> CandidateEvaluation:
     )
     resource_prefix = f"{airport.iata_code}:"
     bookings = []
+    capacity = airport.capacity
+    if capacity:
+        source = f"airport_capacity/{capacity.iata_code}/{capacity.source_version}; sha256:{capacity.source_sha256}; challenge_synthetic"
+        for key, owner, measured, bound, unit in (
+            (
+                "CAPACITY_ACTIVE_RUNWAYS",
+                "ATC",
+                len(airport.runways),
+                capacity.active_runways,
+                "modeled runway count",
+            ),
+            (
+                "CAPACITY_GATE_TOTAL",
+                "GROUND",
+                len(airport.gates),
+                capacity.gates,
+                "modeled gate count",
+            ),
+        ):
+            add(
+                key,
+                owner,
+                measured <= bound,
+                measured,
+                bound,
+                unit,
+                bound - measured,
+                source=source,
+            )
+        minimum = capacity.min_turnaround_min * 60
+        add(
+            "CAPACITY_MIN_TURNAROUND",
+            "GROUND",
+            s.turnaround_seconds >= minimum,
+            s.turnaround_seconds,
+            minimum,
+            "seconds",
+            s.turnaround_seconds - minimum,
+            source=source,
+        )
+        operations = rolling_operations(
+            [
+                r.interval.start.timestamp()
+                for r in s.reservations
+                if r.resource.startswith(f"runway:{resource_prefix}")
+            ],
+            touchdown.timestamp(),
+        )
+        add(
+            "CAPACITY_RUNWAY_OPERATIONS",
+            "ATC",
+            operations <= capacity.max_runway_ops_per_hour,
+            operations,
+            capacity.max_runway_ops_per_hour,
+            "modeled operations / rolling 60 min",
+            capacity.max_runway_ops_per_hour - operations,
+            source=source,
+        )
 
     def reserve(kind, ident, interval, capacity, owner, key):
         resource = (
@@ -352,6 +412,29 @@ def evaluate(s: Snapshot, p: CandidatePlan) -> CandidateEvaluation:
         "UTC",
     )
     reserve("gate", gate.id, gate_window, 1, "GROUND", "GATE_BOOKING")
+    if capacity and (a.action == "DIVERT" or gate.id != s.preferred_gate):
+        spare = [
+            r for r in s.reservations if r.resource == f"spare_gate:{airport.iata_code}"
+        ]
+        used = peak(gate_window, spare)
+        add(
+            "CAPACITY_SPARE_GATES",
+            "GROUND",
+            used <= capacity.spare_gates_at_any_time,
+            used,
+            capacity.spare_gates_at_any_time,
+            "concurrent reassigned/diverted gate allocations",
+            capacity.spare_gates_at_any_time - used,
+            source=source,
+        )
+        bookings.append(
+            Reservation(
+                resource=f"spare_gate:{airport.iata_code}",
+                interval=gate_window,
+                flight_id=s.flight_id,
+                wake_class=aircraft.wake_class,
+            )
+        )
     add(
         "CREW_SKILLS",
         "GROUND",

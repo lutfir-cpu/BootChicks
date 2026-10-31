@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from typing import Protocol
 
+from bootchicks.capacity import rolling_operations
 from models import (
     ROLES,
     AgentResponse,
@@ -92,6 +93,50 @@ def validate(s: Scenario, p: Candidate) -> tuple[Check, ...]:
         s.nominal_arrival_min <= p.landing_min <= s.nominal_arrival_min + HORIZON_MIN,
         f"Landing {p.landing_min}; replay window {s.nominal_arrival_min} to {s.nominal_arrival_min + HORIZON_MIN} min.",
     )
+    capacity = s.airport_capacity
+    if capacity:
+        for rule, owner, passed, detail in (
+            (
+                "CAPACITY_ACTIVE_RUNWAYS",
+                "ATC",
+                len(s.runways) <= capacity.active_runways,
+                f"{len(s.runways)} modeled runways; supplied airport total {capacity.active_runways}.",
+            ),
+            (
+                "CAPACITY_GATE_TOTAL",
+                "Ground",
+                len(s.gates) <= capacity.gates,
+                f"{len(s.gates)} modeled gates; supplied airport total {capacity.gates}.",
+            ),
+            (
+                "CAPACITY_MIN_TURNAROUND",
+                "Ground",
+                s.turnaround_min >= capacity.min_turnaround_min,
+                f"Turnaround {s.turnaround_min} min; supplied minimum {capacity.min_turnaround_min} min.",
+            ),
+            (
+                "CAPACITY_SPARE_GATES",
+                "Ground",
+                p.gate_id == s.original_gate or capacity.spare_gates_at_any_time >= 1,
+                f"Gate changes consume one of {capacity.spare_gates_at_any_time} supplied spare allocations.",
+            ),
+        ):
+            add(
+                rule,
+                owner,
+                passed,
+                detail + f" Source: {capacity.source_version} (challenge synthetic).",
+            )
+        used = rolling_operations(
+            [i.start * 60 for runway in s.runways for i in runway.reservations],
+            p.landing_min * 60,
+        )
+        add(
+            "CAPACITY_RUNWAY_OPERATIONS",
+            "ATC",
+            used <= capacity.max_runway_ops_per_hour,
+            f"{used} modeled runway operations in an affected rolling hour; supplied cap {capacity.max_runway_ops_per_hour}. Source: {capacity.source_version}. Unmodeled traffic is excluded.",
+        )
     runway = next((r for r in s.runways if r.id == p.runway_id), None)
     add(
         "RUNWAY_EXISTS",
