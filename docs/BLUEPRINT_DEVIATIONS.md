@@ -26,7 +26,7 @@ The deviations fall into four groups:
 1. **Evidence gaps:** there is no live-model run, only one real source row, and none of the evaluation tooling the demo guide asks for.
 2. **Behavioural gaps:** a few checks are weaker than specified or missing.
    For example, gate-wait cost is always zero, alternate-fuel reachability is not checked separately, and turnaround minimum is only enforced through the capacity CSV.
-3. **Scope additions:** the blueprint does not ask for the airport-capacity CSV checks, the gate-occupancy inputs or the Streamlit frontend.
+3. **Scope additions:** the blueprint does not ask for the airport-capacity CSV checks, the gate-occupancy inputs, editable prompts or the React frontend.
 4. **Structural and naming differences:** these are harmless but worth knowing when reading the blueprint against the code.
 
 ## 1. Evidence gaps
@@ -173,12 +173,12 @@ The deviations fall into four groups:
 
 | Addition | Notes |
 | --- | --- |
-| Streamlit frontend in `frontend/` | Section 2 and section 18 exclude UI work. It uses a different, older protocol: a single candidate with counterproposals, gates G1/G2, and statuses "Agreed"/"Fallback recommendation". It allows **1-3 rounds** (`frontend/app.py:107-108`), which contradicts `MAX_NEGOTIATION_ROUNDS = 2`. It shares the backend database for capacity lookups. |
+| React frontend in `frontend/` | Section 2 and section 18 exclude UI work. It is a client of the backend API only and shows the blueprint's two-round protocol; it has no negotiation logic of its own. `bootchicks serve` serves the built app at `/`. |
 | Challenge airport-capacity CSV | `data/constraints/airport_capacity.csv` and `capacity.py` import versioned synthetic limits into SQLite. This adds the checks `CAPACITY_ACTIVE_RUNWAYS`, `CAPACITY_GATE_TOTAL`, `CAPACITY_MIN_TURNAROUND`, `CAPACITY_RUNWAY_OPERATIONS` and `CAPACITY_SPARE_GATES`. |
 | User-defined gate occupancies | `RunRequest.gate_occupancies` and `--gate-occupancies` inject extra gate reservations relative to the scenario clock. |
-| Extra API endpoints | `GET /airport-capacities` and `GET /airport-capacities/{iata_code}`. `POST /runs` also accepts a `RunRequest` wrapper as well as a bare `WorkflowInput`. |
+| Extra API endpoints and fields | `GET /airport-capacities`, `GET /airport-capacities/{iata_code}` and `GET /options`. `POST /runs` also accepts a `RunRequest` wrapper as well as a bare `WorkflowInput`. `RunRequest.environment` starts a run in its own simulated environment so earlier commits do not block it. |
 | Synthetic failure scenarios | `insufficient_fuel`, `no_gate` and `diversion` are code-level overrides in `scenario.py:70-83`, not separate versioned scenario files. |
-| Editable prompts | Frontend only. The backend prompt is fixed as `blueprint-agents-v1`. |
+| Editable prompts | `RunRequest.role_prompts` overrides the live system prompt per role. The prompts used are recorded in `ROUND_INPUT`, and agent messages carry `blueprint-agents-v2+custom-<hash>` when edited; defaults are `blueprint-agents-v2`. |
 
 ## 4. Structural and naming differences
 
@@ -214,5 +214,4 @@ Ordered by the demo guide's rubric weight and the effort each takes:
 2. Add an E1-E6 case runner that writes a small evaluation table with run IDs and counts.
 3. Add `operational_use: SIMULATION_ONLY` and a human-review status to `RunResult`, and put the failed constraints into escalated results.
 4. Fix the behavioural gaps: separate the alternate-fuel/reachability check, distinguish `STALE_SNAPSHOT`, add string length limits, read the taxi duration and time zones from the profile, and either remove the gate-wait weight or model gate wait.
-5. Decide whether the Streamlit frontend stays in scope.
-   If it does, cap it at two rounds or clearly label it as a legacy protocol in the demo.
+5. Resolved: the Streamlit frontend and its legacy protocol were replaced by a React client of the backend.
