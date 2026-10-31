@@ -100,10 +100,10 @@ function stage(name: string) {
 }
 
 const STAGES = [
-  'Round 1 - Independent proposals',
-  'Proposal board',
-  'Round 2 - Votes on feasible plans',
-  'Decision and commit',
+  'Round 1 - Proposals',
+  'Hard checks',
+  'Round 2 - Votes',
+  'Decision',
 ]
 
 function currentStage() {
@@ -117,12 +117,12 @@ function scrolledTo() {
 }
 
 function outcome() {
-  return within(screen.getByRole('article', { name: 'Decision' }))
+  return within(screen.getByRole('article', { name: 'Outcome' }))
 }
 
 async function runAndWait(user: ReturnType<typeof userEvent.setup>, title = 'Consensus') {
   await user.click(screen.getByRole('button', { name: 'Run negotiation' }))
-  expect(await outcome().findByText(title, { selector: '.badge' })).toBeInTheDocument()
+  expect(await outcome().findByText(title, { selector: '.verdict-status' })).toBeInTheDocument()
 }
 
 describe('Arrival desk', () => {
@@ -341,12 +341,12 @@ describe('Arrival desk', () => {
       () => {
         const name = currentStage()
         if (name && seen.at(-1) !== name) seen.push(name)
-        expect(outcome().queryByText('Consensus', { selector: '.badge' })).toBeInTheDocument()
+        expect(outcome().queryByText('Consensus', { selector: '.verdict-status' })).toBeInTheDocument()
       },
       { timeout: 4000, interval: 15 },
     )
     expect(seen).toEqual(STAGES)
-    expect(within(stage('Round 1 - Independent proposals')).getAllByText('Complete')).toHaveLength(3)
+    expect(within(stage('Round 1 - Proposals')).getAllByText('Complete')).toHaveLength(3)
 
     expect(currentStage()).toBeNull()
     expect(screen.queryByRole('button', { name: 'Skip replay' })).not.toBeInTheDocument()
@@ -360,7 +360,7 @@ describe('Arrival desk', () => {
     const user = await renderDesk(60_000)
     await user.click(screen.getByRole('button', { name: 'Run negotiation' }))
     await user.click(await screen.findByRole('button', { name: 'Skip replay' }))
-    expect(outcome().getByText('Consensus', { selector: '.badge' })).toBeInTheDocument()
+    expect(outcome().getByText('Consensus', { selector: '.verdict-status' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Skip replay' })).not.toBeInTheDocument()
     expect(currentStage()).toBeNull()
   })
@@ -369,7 +369,7 @@ describe('Arrival desk', () => {
     const user = await renderDesk(60)
     await user.click(screen.getByRole('button', { name: 'Run negotiation' }))
     fireEvent.wheel(window)
-    expect(await outcome().findByText('Consensus', { selector: '.badge' }, { timeout: 4000 })).toBeInTheDocument()
+    expect(await outcome().findByText('Consensus', { selector: '.verdict-status' }, { timeout: 4000 })).toBeInTheDocument()
     expect(scrolledTo()).toEqual(['round1-stage-title'])
   })
 
@@ -379,7 +379,7 @@ describe('Arrival desk', () => {
     await screen.findByRole('button', { name: 'Skip replay' })
     const live = document.querySelectorAll('.connector.is-live')
     expect(live).toHaveLength(1)
-    expect(stage('Round 1 - Independent proposals')).toContainElement(live[0] as HTMLElement)
+    expect(stage('Round 1 - Proposals')).toContainElement(live[0] as HTMLElement)
     expect(live[0].querySelectorAll('.bit')).not.toHaveLength(0)
   })
 

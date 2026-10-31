@@ -36,10 +36,10 @@ export function ProposalBoard({ run }: { run: RunView | null }) {
                     <td className="mono" title={actionText(c.action)}>
                       {c.candidate_id.slice(0, 8)}
                     </td>
-                    <td className="mono">
+                    <td>
                       {clockTime(c.action.landing_slot)} {c.action.runway_id}
                     </td>
-                    <td className="mono">{c.action.gate_id}</td>
+                    <td>{c.action.gate_id}</td>
                     <td>
                       <span className="roles">
                         {c.proposers.map((role) => (
@@ -64,9 +64,9 @@ export function ProposalBoard({ run }: { run: RunView | null }) {
           </table>
         </div>
       ) : (
-        <div className="output">
+        <div className="agent-body">
           {status === 'running' && <Loading>Checking every proposal...</Loading>}
-          {status === 'waiting' && <p className="empty-value">Waiting.</p>}
+          {status === 'waiting' && <p className="empty-value">Every proposed plan is checked here.</p>}
           {status === 'skipped' && run && <p className="empty-value">{skippedReason(run)}</p>}
         </div>
       )}

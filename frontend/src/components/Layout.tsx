@@ -3,6 +3,15 @@ import { ROLE_NAMES } from '../labels'
 import type { CardStatus, LogLine } from '../trace'
 import type { Role } from '../types'
 
+/** A closing cross for icon buttons, drawn to match the 1.5 px chevrons. */
+export function CloseIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+      <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 const STATUS_LABELS: Record<CardStatus, string> = {
   waiting: 'Waiting',
   running: 'Running',
@@ -19,31 +28,22 @@ export function RoleTag({ role }: { role: Role }) {
   return <span className={`role role-${role.toLowerCase()}`}>{ROLE_NAMES[role]}</span>
 }
 
-export function LogPanel({ label, lines, ref }: { label: string; lines: LogLine[]; ref?: Ref<HTMLDivElement> }) {
+/** The raw event log, collapsed under the readable result; `ref` lets the top bar open and focus it. */
+export function LogPanel({ label, lines, ref }: { label: string; lines: LogLine[]; ref?: Ref<HTMLDetailsElement> }) {
+  if (!lines.length) return null
   return (
-    <div className="panel-block">
-      <h4 className="panel-title">Logs</h4>
-      <div ref={ref} className="logs" tabIndex={0} aria-label={label} role="log">
-        {lines.length ? (
-          lines.map((entry, index) => (
-            <div className="log-line" key={index}>
-              <span>[{entry.time}]</span> {entry.message}
-            </div>
-          ))
-        ) : (
-          <span className="empty-value">No entries yet.</span>
-        )}
+    <details ref={ref} className="log-panel">
+      <summary>
+        Log <span className="subtle">{lines.length}</span>
+      </summary>
+      <div className="logs" tabIndex={0} aria-label={label} role="log">
+        {lines.map((entry, index) => (
+          <div className="log-line" key={index}>
+            <span>{entry.time}</span> {entry.message}
+          </div>
+        ))}
       </div>
-    </div>
-  )
-}
-
-export function Panel({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className="output">
-      <h4 className="panel-title">{title}</h4>
-      {children}
-    </div>
+    </details>
   )
 }
 

@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react'
 import { fetchFlight, searchFlights } from '../api'
 import { busyPeriodErrors, type BusyPeriod } from '../busyPeriods'
 import { formatNumber, ROLE_NAMES } from '../labels'
+import { CloseIcon, DataLine } from './Layout'
 import {
   ROLES,
   type FlightSearch,
@@ -41,7 +42,7 @@ export function ScenarioControls({
   const scenario = options.scenarios.find((s) => s.id === scenarioId)
   return (
     <div className="input-column">
-      <h2>Scenario controls</h2>
+      <h2>Setup</h2>
       <div className="field">
         <label htmlFor="scenario">Scenario</label>
         <select id="scenario" value={scenarioId} onChange={(e) => onScenario(e.target.value)}>
@@ -76,7 +77,7 @@ export function ScenarioControls({
         </p>
         {!options.live_available && (
           <p className="field-hint">
-            Set <code>ANTHROPIC_API_KEY</code> in <code>.env</code> to enable Claude agents.
+            Claude agents need <code>ANTHROPIC_API_KEY</code> in <code>.env</code>.
           </p>
         )}
       </div>
@@ -86,14 +87,20 @@ export function ScenarioControls({
 
 function Fields({ fields }: { fields: [label: string, value: string][] }) {
   return (
-    <dl className="input-fields">
+    <div className="facts">
       {fields.map(([label, value]) => (
-        <div className="field" key={label}>
-          <dt className="field-label">{label}</dt>
-          <dd className="field-value">{value}</dd>
-        </div>
+        <DataLine key={label} label={label} value={value} />
       ))}
-    </dl>
+    </div>
+  )
+}
+
+function ColumnTitle({ title, badge }: { title: string; badge: string }) {
+  return (
+    <h2 className="column-title">
+      {title}
+      <span className="source-badge sim-badge">{badge}</span>
+    </h2>
   )
 }
 
@@ -115,13 +122,10 @@ export function FlightRecord({
   if (source === 'synthetic') {
     return (
       <div className="input-column">
-        <h2>Flight record</h2>
-        <div className="source-row">
-          <span className="source-badge sim-badge">Synthetic fixture</span>
-        </div>
+        <ColumnTitle title="Flight" badge="Synthetic" />
         <Fields
           fields={[
-            ['Flight', 'SYNTHETIC-DEMO'],
+            ['Number', 'SYNTHETIC-DEMO'],
             ['Destination', 'DFW'],
           ]}
         />
@@ -132,15 +136,16 @@ export function FlightRecord({
   const date = `${row.YEAR}-${String(row.MONTH).padStart(2, '0')}-${String(row.DAY).padStart(2, '0')}`
   return (
     <div className="input-column">
-      <h2>Flight record</h2>
-      <div className="source-row">
-        <span className="source-badge">US DOT dataset</span>
-        <span className="source-badge">CSV line {trigger.provenance.csv_line}</span>
-      </div>
+      <h2 className="column-title">
+        Flight
+        <span className="source-badge" title={`CSV line ${trigger.provenance.csv_line}`}>
+          US DOT 2015
+        </span>
+      </h2>
       <FlightPicker selected={trigger.provenance.csv_line} onPick={onPick} />
       <Fields
         fields={[
-          ['Flight', `${row.AIRLINE} ${row.FLIGHT_NUMBER}`],
+          ['Number', `${row.AIRLINE} ${row.FLIGHT_NUMBER}`],
           ['Airline', trigger.airline_row.AIRLINE],
           ['Route', `${row.ORIGIN_AIRPORT} to ${row.DESTINATION_AIRPORT}`],
           ['Date', date],
@@ -239,11 +244,7 @@ export function AirportState({ scenario }: { scenario: ScenarioOption }) {
   const alternate = scenario.airports.find((airport) => airport.kind === 'alternate')
   return (
     <div className="input-column">
-      <h2>Simulated airport state</h2>
-      <div className="source-row">
-        <span className="source-badge sim-badge">Simulated inputs</span>
-        <span className="source-badge sim-badge">Mock profiles</span>
-      </div>
+      <ColumnTitle title="Airport" badge="Simulated" />
       <Fields
         fields={[
           ['Aircraft', a.type_label],
@@ -292,14 +293,14 @@ export function BusyPeriodsEditor({
   return (
     <fieldset className="input-column">
       <legend className="section-title">Gate busy periods</legend>
-      <p className="field-hint">Minutes after the scenario starts.</p>
+      {rows.length === 0 && <p className="field-hint">Block a gate for part of the window.</p>}
       {rows.length > 0 && (
         <div className="busy-table" role="table" aria-label="Gate busy periods">
           <div className="busy-row busy-head" role="row">
             <span role="columnheader">Airport</span>
             <span role="columnheader">Gate</span>
-            <span role="columnheader">From</span>
-            <span role="columnheader">Until</span>
+            <span role="columnheader">From (min)</span>
+            <span role="columnheader">Until (min)</span>
             <span />
           </div>
           {rows.map((row, index) => (
@@ -349,7 +350,7 @@ export function BusyPeriodsEditor({
                   aria-label={`Remove period ${index + 1}`}
                   onClick={() => onChange(rows.filter((r) => r.id !== row.id))}
                 >
-                  ×
+                  <CloseIcon />
                 </button>
               </div>
               {errors[row.id] && (
@@ -447,7 +448,7 @@ export function PromptEditor({
         )}
         <div className="prompt-actions">
           <span className="field-hint">
-            {prompts[active] === defaults[active] ? 'Default prompt' : 'Edited, saved in this browser'}
+            {prompts[active] === defaults[active] ? 'Default prompt' : 'Edited · saved in this browser'}
           </span>
           <button
             type="button"
