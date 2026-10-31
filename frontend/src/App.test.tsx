@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
@@ -88,11 +88,32 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-async function renderDesk() {
+async function renderDesk(stepMs = 0) {
   const user = userEvent.setup()
-  render(<App />)
+  render(<App stepMs={stepMs} />)
   await screen.findByRole('button', { name: 'Run negotiation' })
   return user
+}
+
+function stage(name: string) {
+  return screen.getByRole('region', { name })
+}
+
+const STAGES = [
+  'Round 1 - Independent proposals',
+  'Proposal board',
+  'Round 2 - Votes on feasible plans',
+  'Decision and commit',
+]
+
+function currentStage() {
+  return STAGES.find((name) => stage(name).getAttribute('aria-current') === 'step') ?? null
+}
+
+function scrolledTo() {
+  return vi.mocked(Element.prototype.scrollIntoView).mock.contexts.map((el) =>
+    (el as HTMLElement).getAttribute('aria-labelledby'),
+  )
 }
 
 function outcome() {
@@ -201,7 +222,7 @@ describe('Arrival desk', () => {
     await waitFor(() => expect(within(list).getAllByRole('option')).toHaveLength(1))
     await user.selectOptions(list, '2928819')
     expect(await screen.findByText('AUS to DFW')).toBeInTheDocument()
-    expect(document.querySelector('.scenario-status')).toHaveTextContent('UA 1356 · DFW · Ready')
+    expect(screen.getByText('UA 1356')).toBeInTheDocument()
 
     await runAndWait(user)
     expect(server.submitted[0].body.trigger).toMatchObject({
@@ -307,5 +328,66 @@ describe('Arrival desk', () => {
     vi.mocked(fetch).mockImplementation(() => Promise.reject(new TypeError('Failed to fetch')))
     render(<App />)
     expect(await screen.findByText(/Cannot reach the BootChicks server/)).toBeInTheDocument()
+  })
+
+  it('replays a fast run stage by stage and keeps the current stage in view', async () => {
+    const user = await renderDesk(60)
+    expect(currentStage()).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Run negotiation' }))
+    expect(screen.getByRole('button', { name: 'Negotiating...' })).toBeDisabled()
+
+    const seen: string[] = []
+    await waitFor(
+      () => {
+        const name = currentStage()
+        if (name && seen.at(-1) !== name) seen.push(name)
+        expect(outcome().queryByText('Consensus', { selector: '.badge' })).toBeInTheDocument()
+      },
+      { timeout: 4000, interval: 15 },
+    )
+    expect(seen).toEqual(STAGES)
+    expect(within(stage('Round 1 - Independent proposals')).getAllByText('Complete')).toHaveLength(3)
+
+    expect(currentStage()).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Skip replay' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Run negotiation' })).toBeEnabled()
+    expect(new Set(scrolledTo())).toEqual(
+      new Set(['round1-stage-title', 'board-stage-title', 'round2-stage-title', 'decision-stage-title']),
+    )
+  })
+
+  it('shows the whole run at once when the replay is skipped', async () => {
+    const user = await renderDesk(60_000)
+    await user.click(screen.getByRole('button', { name: 'Run negotiation' }))
+    await user.click(await screen.findByRole('button', { name: 'Skip replay' }))
+    expect(outcome().getByText('Consensus', { selector: '.badge' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Skip replay' })).not.toBeInTheDocument()
+    expect(currentStage()).toBeNull()
+  })
+
+  it('stops following the stages once the user scrolls', async () => {
+    const user = await renderDesk(60)
+    await user.click(screen.getByRole('button', { name: 'Run negotiation' }))
+    fireEvent.wheel(window)
+    expect(await outcome().findByText('Consensus', { selector: '.badge' }, { timeout: 4000 })).toBeInTheDocument()
+    expect(scrolledTo()).toEqual(['round1-stage-title'])
+  })
+
+  it('animates the connector leading into the current stage only', async () => {
+    const user = await renderDesk(60_000)
+    await user.click(screen.getByRole('button', { name: 'Run negotiation' }))
+    await screen.findByRole('button', { name: 'Skip replay' })
+    const live = document.querySelectorAll('.connector.is-live')
+    expect(live).toHaveLength(1)
+    expect(stage('Round 1 - Independent proposals')).toContainElement(live[0] as HTMLElement)
+    expect(live[0].querySelectorAll('.bit')).not.toHaveLength(0)
+  })
+
+  it('keeps the page header to the essentials', async () => {
+    await renderDesk()
+    expect(screen.queryByRole('button', { name: 'Demo' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Input')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Demo flight ·/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Python checks/)).not.toBeInTheDocument()
   })
 })

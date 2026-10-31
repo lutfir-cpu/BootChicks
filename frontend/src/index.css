@@ -104,6 +104,9 @@ a {
 }
 
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   background: var(--panel-dark);
   border-bottom: 1px solid var(--line-dark);
   color: var(--card);
@@ -113,8 +116,8 @@ a {
   max-width: 1400px;
   margin: auto;
   padding: 15px 30px;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
+  justify-content: space-between;
   align-items: center;
   gap: 16px;
 }
@@ -139,32 +142,12 @@ a {
   font-size: 18px;
 }
 
-.scenario-status {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--muted);
-  border: 1px solid #576574;
-  padding: 7px 12px;
-  border-radius: 7px;
-  white-space: nowrap;
-}
-
-.status-running,
-.status-fallback {
-  color: var(--warn);
-}
-
-.status-consensus {
-  color: #70c6a4;
-}
-
-.status-escalated,
-.status-failed {
-  color: #ff9d9d;
+.top-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .trace-btn {
-  justify-self: end;
   color: var(--card);
   background: transparent;
   border: 1px solid #557083;
@@ -174,8 +157,7 @@ a {
   font-weight: 600;
 }
 
-.trace-btn:hover,
-.demo-btn:hover {
+.trace-btn:hover {
   background: #203a4d;
 }
 
@@ -222,36 +204,11 @@ a {
   margin-top: 60px;
 }
 
-.input-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: start;
-  gap: 16px;
-}
-
-.kicker {
-  margin: 0;
-  color: var(--teal);
-  font: 700 11px var(--mono);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.input-heading h1,
+.input-card h1,
 .notice h1 {
-  margin: 4px 0 20px;
+  margin: 0 0 20px;
   font-size: 23px;
   letter-spacing: -0.035em;
-}
-
-.demo-btn {
-  background: var(--panel-dark);
-  color: var(--card);
-  border: 1px solid #557083;
-  border-radius: 7px;
-  padding: 8px 16px;
-  font-size: 12px;
-  font-weight: 700;
 }
 
 /* Input columns */
@@ -513,11 +470,15 @@ textarea {
 
 .input-footer {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 19px;
+  text-align: center;
+}
+
+.input-footer .field-error {
+  margin: 0;
 }
 
 .primary-btn {
@@ -525,8 +486,8 @@ textarea {
   color: var(--ink);
   border: 0;
   border-radius: 8px;
-  padding: 11px 17px;
-  font-size: 12px;
+  padding: 11px 26px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -545,6 +506,47 @@ textarea {
 }
 
 /* Workflow */
+
+.stage {
+  /* Clear the sticky top bar when a stage is scrolled to the top. */
+  scroll-margin-top: 84px;
+  transition: opacity 0.35s ease;
+}
+
+.workflow.is-focused .stage:not(.is-active) {
+  opacity: 0.42;
+}
+
+.stage .card {
+  transition:
+    border-color 0.35s ease,
+    box-shadow 0.35s ease;
+}
+
+.stage.is-active .card {
+  border-color: var(--cyan);
+  box-shadow:
+    0 0 0 1px var(--cyan),
+    0 8px 30px #35bcd640;
+}
+
+.stage.is-active .turn-title::before {
+  content: '';
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin: 0 11px 3px 0;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 0 0 #35bcd699;
+  animation: beacon 1.4s ease-out infinite;
+}
+
+@keyframes beacon {
+  to {
+    box-shadow: 0 0 0 9px #35bcd600;
+  }
+}
 
 .turn-title {
   margin: 32px 0 19px;
@@ -981,6 +983,121 @@ tr.selected td {
   border-left: 2px solid var(--cyan);
 }
 
+/* Bits travel each connector in three legs over one cycle: down 0-38%, across 38-62%, down 62-100%. */
+
+.bit {
+  display: none;
+  position: absolute;
+  padding: 1px 2px;
+  background: var(--night);
+  color: var(--cyan);
+  font: 700 10px/1 var(--mono);
+  text-shadow: 0 0 6px var(--cyan);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.connector.is-live .bit {
+  display: block;
+  animation: 1.8s linear infinite;
+  animation-delay: calc(var(--packet) * -0.6s);
+}
+
+/* Lines are zero-width boxes with a 2 px border just outside them, so -1px centres a bit on the line. */
+.bit-first,
+.bit-last {
+  left: -1px;
+}
+
+.bit-out-left,
+.bit-out-right,
+.bit-in-left,
+.bit-in-right {
+  top: -1px;
+}
+
+.connector.is-live .bit-first {
+  animation-name: bit-first;
+}
+
+.connector.is-live .bit-last {
+  animation-name: bit-last;
+}
+
+.connector.is-live :is(.bit-out-left, .bit-out-right, .bit-in-left, .bit-in-right) {
+  animation-name: bit-across;
+}
+
+.bit-out-left {
+  --from: 50%;
+  --to: 0%;
+}
+
+.bit-out-right {
+  --from: 50%;
+  --to: 100%;
+}
+
+.bit-in-left {
+  --from: 0%;
+  --to: 50%;
+}
+
+.bit-in-right {
+  --from: 100%;
+  --to: 50%;
+}
+
+@keyframes bit-first {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  4%,
+  34% {
+    opacity: 1;
+  }
+  38%,
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+@keyframes bit-across {
+  0%,
+  38% {
+    left: var(--from);
+    opacity: 0;
+  }
+  40%,
+  60% {
+    opacity: 1;
+  }
+  62%,
+  100% {
+    left: var(--to);
+    opacity: 0;
+  }
+}
+
+@keyframes bit-last {
+  0%,
+  62% {
+    top: 0%;
+    opacity: 0;
+  }
+  66%,
+  94% {
+    opacity: 1;
+  }
+  100% {
+    /* Fade out above the arrowhead. */
+    top: 84%;
+    opacity: 0;
+  }
+}
+
 button:focus-visible,
 select:focus-visible,
 input:focus-visible,
@@ -1006,21 +1123,6 @@ summary:focus-visible,
 
   .connector {
     display: none;
-  }
-
-  .top-inner {
-    grid-template-columns: 1fr auto;
-  }
-
-  .scenario-status {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    justify-self: start;
-  }
-
-  .trace-btn {
-    grid-column: 2;
-    grid-row: 1;
   }
 }
 
@@ -1049,5 +1151,9 @@ summary:focus-visible,
   *::after {
     animation-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  .connector.is-live .bit {
+    display: none;
   }
 }

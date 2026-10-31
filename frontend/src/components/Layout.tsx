@@ -1,4 +1,4 @@
-import type { ReactNode, Ref } from 'react'
+import type { CSSProperties, ReactNode, Ref } from 'react'
 import { ROLE_NAMES } from '../labels'
 import type { CardStatus, LogLine } from '../trace'
 import type { Role } from '../types'
@@ -77,26 +77,56 @@ export function DataLine({
   )
 }
 
-export function BranchConnector() {
+const PACKETS = ['1', '0', '1']
+
+/**
+ * Bits that travel along one line of a connector. Every connector moves a packet in three legs, first
+ * down, then across, then down again, so legs with the same packet index line up into one journey.
+ */
+function Bits({ leg }: { leg: 'first' | 'out-left' | 'out-right' | 'in-left' | 'in-right' | 'last' }) {
+  return PACKETS.map((bit, index) => (
+    <span key={index} className={`bit bit-${leg}`} style={{ '--packet': index } as CSSProperties}>
+      {bit}
+    </span>
+  ))
+}
+
+/** One line fanning out to three; while `live`, bits flow down it into the next stage. */
+export function BranchConnector({ live = false }: { live?: boolean }) {
   return (
-    <div className="branch connector" aria-hidden="true">
-      <div className="stem" />
-      <div className="crossbar" />
-      <div className="drop left" />
-      <div className="drop center" />
-      <div className="drop right" />
+    <div className={live ? 'branch connector is-live' : 'branch connector'} aria-hidden="true">
+      <div className="stem">
+        <Bits leg="first" />
+      </div>
+      <div className="crossbar">
+        <Bits leg="out-left" />
+        <Bits leg="out-right" />
+      </div>
+      {(['left', 'center', 'right'] as const).map((side) => (
+        <div key={side} className={`drop ${side}`}>
+          <Bits leg="last" />
+        </div>
+      ))}
     </div>
   )
 }
 
-export function MergeConnector() {
+/** Three lines joining into one; while `live`, bits flow down it into the next stage. */
+export function MergeConnector({ live = false }: { live?: boolean }) {
   return (
-    <div className="merge connector" aria-hidden="true">
-      <div className="merge-line left" />
-      <div className="merge-line center" />
-      <div className="merge-line right" />
-      <div className="bar" />
-      <div className="merge-stem" />
+    <div className={live ? 'merge connector is-live' : 'merge connector'} aria-hidden="true">
+      {(['left', 'center', 'right'] as const).map((side) => (
+        <div key={side} className={`merge-line ${side}`}>
+          <Bits leg="first" />
+        </div>
+      ))}
+      <div className="bar">
+        <Bits leg="in-left" />
+        <Bits leg="in-right" />
+      </div>
+      <div className="merge-stem">
+        <Bits leg="last" />
+      </div>
     </div>
   )
 }
